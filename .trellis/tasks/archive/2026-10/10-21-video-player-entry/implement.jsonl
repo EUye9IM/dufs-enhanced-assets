@@ -1,0 +1,6 @@
+{"file": ".trellis/tasks/10-21-video-player-entry/design.md", "reason": "本任务技术设计：dufs 契约行号、改动面、加载器与降级矩阵"}
+{"file": ".trellis/tasks/10-21-video-player-entry/implement.md", "reason": "执行顺序、Gate 验证命令与回滚点"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "前端层规范索引（当前为模板占位，以 design.md 契约优先）"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "跨层思考指南：前端 assets 与 dufs 服务端契约的边界"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "复用优先：extName/baseUrl/ICONS/actionCell 等既有工具函数"}
+{"file": ".trellis/tasks/10-21-video-player-entry/research/verified-contracts.md", "reason": "实测契约：assets 必须带版本前缀、wasm MIME、Range、?view/?edit 无门禁、curl UA 陷阱"}

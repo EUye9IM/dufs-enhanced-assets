@@ -1,0 +1,5 @@
+# Local agent tooling — not part of the shipped asset pack.
+/.agents/
+/.pi/
+/skills-lock.json
+/.gitattributes
