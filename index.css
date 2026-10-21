@@ -289,6 +289,7 @@ body.has-movi-player {
 }
 
 body.has-movi-player .editor-page {
+  position: relative;
   height: calc(100vh - 3.1em);
 }
 
@@ -301,6 +302,24 @@ body.has-movi-player .editor-page {
 
 .movi-player:not(:defined) {
   display: none;
+}
+
+/* Shown only on insecure origins, where WebCodecs is unavailable. */
+.movi-hint {
+  position: absolute;
+  top: 0.75em;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  max-width: min(90%, 46em);
+  padding: 0.45em 0.9em;
+  border-radius: 0.4em;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  font-size: 0.85em;
+  line-height: 1.45;
+  text-align: center;
+  pointer-events: none;
 }
 
 .retry-btn {

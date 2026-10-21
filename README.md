@@ -58,6 +58,90 @@ targeted. Firefox lacks WebCodecs, so it falls back to full software decoding �
 but is slow for HD/4K. Mobile is **not** a committed target: an iPhone cannot enter true
 full-screen for a canvas-based player.
 
+## Performance: HTTPS is required for hardware decoding
+
+This matters more than any other setting here, so it is not buried under known issues.
+
+**WebCodecs (`VideoDecoder` / `AudioDecoder`) is only exposed in a secure context.** Browsers
+treat `https://…` and `http://localhost` as secure, but **not** `http://192.168.1.100:24601`.
+On a plain-HTTP LAN origin `typeof VideoDecoder === "undefined"`, so movi-player cannot use
+hardware decoding and falls back to ffmpeg-wasm software decoding **on the main thread**.
+
+Measured on a 1080p H.264 MKV (1.29 GB, 0.73 MB/s realtime bitrate) over Gigabit LAN:
+
+| Path | Decoded frames | Playback progress | Verdict |
+|---|---|---|---|
+| Native `<video>` from the filename link | 120 frames / 5 s (24 fps), 0 dropped | realtime | smooth |
+| movi-player over `http://<lan-ip>` | 38 frames / 6.1 s (**6.2 fps**) | 3.5 s in 6.1 s (**57 %**) | stutters, UI janky |
+| movi-player with WebCodecs available | — | 5.8 s in 6.1 s (95 %) | realtime |
+
+Network was never the constraint: fetching a single 8 MB range from the same page takes
+0.51 s (**15.7 MB/s**) when the player is paused, while realtime playback needs 0.73 MB/s.
+During playback the same fetches slow down because the main thread is busy decoding.
+
+When the player detects `!isSecureContext`, it now shows this warning above the video.
+
+### Fix 1 — serve dufs over HTTPS (recommended)
+
+```bash
+# Self-signed certificate valid for one IP + hostname (OpenSSL 1.1.1+ for -addext)
+openssl req -x509 -newkey rsa:2048 -sha256 -days 3650 -nodes \
+  -keyout dufs.key -out dufs.crt \
+  -subj "/CN=dufs-lan" \
+  -addext "subjectAltName=IP:192.168.1.100,DNS:tiny04"
+
+# dufs serves TLS natively — no reverse proxy needed
+dufs /dl --assets /path/to/dufs-enhanced-assets \
+  --tls-cert dufs.crt --tls-key dufs.key \
+  --bind 0.0.0.0 --port 24601
+```
+
+**The certificate must be trusted**, otherwise the browser still treats the page as insecure
+and WebCodecs stays disabled. Trust it on each client once:
+
+| Platform | Command |
+|---|---|
+| Linux | `sudo cp dufs.crt /usr/local/share/ca-certificates/dufs-lan.crt && sudo update-ca-certificates` (then restart the browser) |
+| macOS | `sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain dufs.crt` |
+| Windows | `certmgr.msc` → Trusted Root Certification Authorities → Import |
+| Firefox | has its own store: Settings → Privacy → Certificates → View Certificates → Import |
+
+Verify afterwards — on the player page's console:
+
+```js
+isSecureContext   // true
+typeof VideoDecoder  // "function"
+```
+
+Alternatives if you would rather not manage a self-signed cert: use `mkcert` (local CA),
+put dufs behind a reverse proxy with a real certificate, or front it with something like
+Caddy that issues its own local CA.
+
+### Fix 2 — client-side flag (quick, per-machine)
+
+Chrome/Chromium:
+
+1. `chrome://flags/#unsafely-treat-insecure-origin-as-secure`
+2. Add `http://192.168.1.100:24601` and enable the flag, then restart the browser.
+
+Or launch with the same setting:
+
+```bash
+chrome --unsafely-treat-insecure-origin-as-secure=http://192.168.1.100:24601
+```
+
+This weakens the browser's origin security model for that origin (no secure-transport
+guarantees, service workers / powerful APIs become available). Fine for a trusted home
+LAN, not something to hand out to other users — prefer Fix 1.
+
+### Not the fix: the direct filename link
+
+The filename link bypasses the player and lets the browser play the file with its own
+hardware decoder, which is why it looks smooth on files the browser can demux. Two
+caveats: the browser may not support the container/codec at all (that is why this asset
+pack exists), and it will silently drop audio codecs it cannot decode — the `DDP5.1`
+(E-AC3) releases above play fine natively but **without sound**.
+
 ## Known issues
 
 | Issue | Notes |
@@ -67,6 +151,7 @@ full-screen for a canvas-based player.
 | 4K on low-end devices | Not tested; wasm memory pressure is real. |
 | Files > 4 GB | Not tested (32-bit offset risk inside the wasm demuxer). |
 | Basic/Digest auth | Verified working for playback and seek. Note that credentials embedded in the URL (`http://u:p@host/`) break it: movi derives `movi.wasm` from `document.currentScript.src` and `fetch()` rejects URLs containing credentials. Normal auth flows (browser prompt + credential cache) are fine. |
+| Plain-HTTP LAN playback | Slow by design until served over HTTPS — see [Performance: HTTPS is required for hardware decoding](#performance-https-is-required-for-hardware-decoding). The player shows an in-page warning when it detects `!isSecureContext`. |
 
 ## Layout
 

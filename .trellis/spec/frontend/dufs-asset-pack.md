@@ -83,7 +83,25 @@ whitelist is fine for choosing UI**, and is **not** acceptable as a decoder deci
 Extensions do not describe codecs (`.mp4` can be HEVC, `.mkv` can be H.264), and a wrong
 guess reproduces the black-frame bug this project exists to fix.
 
-## 5. Third-party loading
+## 5. Secure context gating (WebCodecs)
+
+WebCodecs (`VideoDecoder` / `AudioDecoder`) is `[SecureContext]`. On
+`http://<lan-ip>` it does not exist at all, so a wasm-based player silently degrades to
+software decoding on the main thread. For 1080p H.264 that is ~6 fps instead of realtime,
+and the saturated main thread also slows the player's own `fetch` calls — which makes it
+*look* like a network problem.
+
+Rules:
+
+- Before blaming the network, check `window.isSecureContext` and `typeof VideoDecoder`.
+- Measure both directions: raw fetch throughput from the page while paused, versus frames
+  decoded per second while playing. Supply far above the bitrate + low fps = decode-bound.
+- Surface the condition in the UI when it is detectable (`!isSecureContext`), rather than
+  letting the user conclude the player is broken.
+- `http://localhost` **is** secure; `http://192.168.x.x` is not. A self-signed certificate
+  only helps once the client trusts it — an untrusted cert still means an insecure context.
+
+## 6. Third-party loading
 
 - Load heavy third-party assets **lazily**, only on the page that needs them. The
   directory page must stay byte-identical to upstream.
@@ -96,7 +114,7 @@ guess reproduces the black-frame bug this project exists to fix.
   `<script>` must be a real `src` script and `fetch()` must not see credentials in that
   URL.
 
-## 6. Verification recipe
+## 7. Verification recipe
 
 There is no test suite. Verification is manual, against a real dufs binary.
 
@@ -129,7 +147,7 @@ Checklist per change:
 | Credentials in the URL break the player | `fetch()` cannot construct a request from a URL containing credentials, and movi derives its wasm URL from `document.currentScript.src`. Use the browser's auth cache. |
 | Shared browser sessions | When automating, use a dedicated session name so parallel work does not hijack the page. |
 
-## 7. Upstream bookkeeping
+## 8. Upstream bookkeeping
 
 `UPSTREAM.md` records the dufs and movi-player versions, the exact local diff against
 upstream `assets/`, and the sha256 of both movi files. Any change to either upstream must

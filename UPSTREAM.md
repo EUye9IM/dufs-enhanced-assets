@@ -22,14 +22,14 @@ Re-apply these when syncing to a newer dufs. Everything else must stay byte-iden
 | `index.js` | `MEDIA_VIDEO_FORMATS`, `MOVI_SCRIPT`, `MOVI_ELEMENT` constants |
 | `index.js` | `ICONS.play` entry |
 | `index.js` | `addPath()`: `isVideo` / `actionPlay`, `actionView` gains `&& !isVideo`, `actionPlay` rendered before `actionDownload` |
-| `index.js` | `loadMovi()` + `mountVideoPlayer()` (new functions, before `setupEditorPage`) |
+| `index.js` | `loadMovi()` + `mountVideoPlayer()` (new functions, before `setupEditorPage`); the mount adds an insecure-context hint when `!isSecureContext` |
 | `index.js` | `setupEditorPage()`: video branch inside `if (!DATA.editable)` |
-| `index.css` | `body.has-movi-player`, `body.has-movi-player .editor-page`, `.movi-player`, `.movi-player:not(:defined)` |
+| `index.css` | `body.has-movi-player`, `body.has-movi-player .editor-page`, `.movi-player`, `.movi-player:not(:defined)`, `.movi-hint` |
 
 Search for any of those symbols to find the current extent of the diff:
 
 ```bash
-grep -n "MEDIA_VIDEO_FORMATS\|MOVI_SCRIPT\|MOVI_ELEMENT\|ICONS.play\|loadMovi\|mountVideoPlayer\|has-movi-player\|dufs-assets-prefix" index.*
+grep -n "MEDIA_VIDEO_FORMATS\|MOVI_SCRIPT\|MOVI_ELEMENT\|ICONS.play\|loadMovi\|mountVideoPlayer\|has-movi-player\|movi-hint\|dufs-assets-prefix" index.*
 ```
 
 ## Syncing dufs assets to a newer dufs

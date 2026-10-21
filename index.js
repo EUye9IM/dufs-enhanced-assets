@@ -765,6 +765,16 @@ async function mountVideoPlayer(url, $slot) {
   $slot.insertAdjacentElement("afterend", $player);
   $slot.classList.add("hidden");
   document.body.classList.add("has-movi-player");
+
+  // WebCodecs (hardware decoding) requires a secure context. Over plain HTTP on a
+  // LAN address movi-player can only fall back to wasm software decoding, which
+  // cannot keep up with HD video. Tell the user instead of letting it look broken.
+  if (!window.isSecureContext) {
+    const $hint = document.createElement("div");
+    $hint.className = "movi-hint";
+    $hint.textContent = "Insecure connection: hardware decoding is unavailable, so the player uses software decoding. HD video may stutter — serve this over HTTPS for smooth playback.";
+    $player.insertAdjacentElement("afterend", $hint);
+  }
 }
 
 async function setupEditorPage() {
