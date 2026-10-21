@@ -3,6 +3,9 @@
 This repository redistributes third-party software. Keep this file with any copy of the
 repository and with any deployment that serves these assets publicly.
 
+Licence texts bundled here: `LICENSE-MIT`, `LICENSE-APACHE` (dufs assets),
+`LICENSE-LGPL-2.1.txt` (FFmpeg inside `movi.wasm`).
+
 ---
 
 ## 1. dufs frontend assets — MIT OR Apache-2.0
@@ -45,8 +48,9 @@ Because FFmpeg is statically linked here, LGPL §6 requires that recipients can 
 against a modified FFmpeg. To comply when you distribute this repository or serve these
 files publicly, provide:
 
-1. This NOTICE file and the LGPL-2.1 text
-   (https://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt), and
+1. This NOTICE file and the LGPL-2.1 text, both included here:
+   `LICENSE-LGPL-2.1.txt` (verbatim copy of
+   https://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt), and
 2. The corresponding source for the FFmpeg build used, plus the toolchain and
    `emconfigure`/`emmake` invocation needed to rebuild `movi.wasm`.
 

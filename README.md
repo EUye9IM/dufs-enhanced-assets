@@ -80,6 +80,9 @@ movi.wasm             movi-player 0.4.1 dist/movi.wasm
 sync-movi.sh          re-download both movi files for another version
 UPSTREAM.md           exact upstream versions + how to sync dufs assets
 NOTICE.md             third-party licences
+LICENSE-MIT           dufs assets
+LICENSE-APACHE        dufs assets
+LICENSE-LGPL-2.1.txt  FFmpeg inside movi.wasm
 ```
 
 ## Updating movi-player
@@ -104,5 +107,7 @@ git lfs migrate import --include="movi.js,movi.wasm"
 ## Licence
 
 The dufs frontend files are derived from dufs and stay under **MIT OR Apache-2.0**
-(`LICENSE-MIT`, `LICENSE-APACHE`). Third-party components and their obligations are
-listed in `NOTICE.md` — read it before publishing this repository or serving it publicly.
+(`LICENSE-MIT`, `LICENSE-APACHE`). `movi.wasm` statically links FFmpeg, so
+**LGPL-2.1-or-later** applies to it (`LICENSE-LGPL-2.1.txt`). `movi.js` is Apache-2.0.
+Third-party components and what redistribution obliges you to do are listed in
+`NOTICE.md` — read it before publishing this repository or serving it publicly.
