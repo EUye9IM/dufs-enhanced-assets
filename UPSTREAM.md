@@ -1,0 +1,91 @@
+# UPSTREAM
+
+Exact upstream versions this asset pack is based on, plus the procedure for moving each
+of them forward. Update this file in the same commit that changes the assets.
+
+---
+
+## Baseline
+
+| Component | Version | Origin |
+|---|---|---|
+| dufs (frontend assets) | **0.47.0** | https://github.com/sigoden/dufs (`assets/`) |
+| movi-player | **0.4.1** | https://registry.npmjs.org/movi-player (`dist/`) |
+
+## Local modifications to the dufs assets
+
+Re-apply these when syncing to a newer dufs. Everything else must stay byte-identical.
+
+| File | Change |
+|---|---|
+| `index.html` | `+ <meta name="dufs-assets-prefix" content="__ASSETS_PREFIX__">` in `<head>` |
+| `index.js` | `MEDIA_VIDEO_FORMATS`, `MOVI_SCRIPT`, `MOVI_ELEMENT` constants |
+| `index.js` | `ICONS.play` entry |
+| `index.js` | `addPath()`: `isVideo` / `actionPlay`, `actionView` gains `&& !isVideo`, `actionPlay` rendered before `actionDownload` |
+| `index.js` | `loadMovi()` + `mountVideoPlayer()` (new functions, before `setupEditorPage`) |
+| `index.js` | `setupEditorPage()`: video branch inside `if (!DATA.editable)` |
+| `index.css` | `body.has-movi-player`, `body.has-movi-player .editor-page`, `.movi-player`, `.movi-player:not(:defined)` |
+
+Search for any of those symbols to find the current extent of the diff:
+
+```bash
+grep -n "MEDIA_VIDEO_FORMATS\|MOVI_SCRIPT\|MOVI_ELEMENT\|ICONS.play\|loadMovi\|mountVideoPlayer\|has-movi-player\|dufs-assets-prefix" index.*
+```
+
+## Syncing dufs assets to a newer dufs
+
+```bash
+# 1. Take the pristine upstream files (adjust the path/version)
+git show <dufs-tag>:assets/index.html > /tmp/up/index.html   # etc.
+
+# 2. Diff against ours, keeping our modifications
+diff -u /tmp/up/index.js index.js
+
+# 3. Re-apply the table above, then verify:
+node --check index.js
+dufs /tmp/dufs-fixtures --assets "$PWD" --bind 127.0.0.1 --port 5000
+#    - <meta name="dufs-assets-prefix"> renders as /__dufs_v<version>__/
+#    - video rows show ▶, text rows do not, no duplicate "View file" icon
+#    - /__dufs_v<version>__/movi.wasm returns 200 application/wasm
+```
+
+Watch out for these dufs internals when re-applying — the design depends on them:
+
+| Expectation | dufs location (0.47.0) |
+|---|---|
+| `?view` / `?edit` have no permission gate, only read access | `src/server.rs:371-378` |
+| `handle_edit_file` reads only 1 KiB + `metadata.len()` | `src/server.rs:1141-1180` |
+| `render_html()` substitutes placeholders **only in the HTML string** | `src/server.rs:868-874` |
+| Any file under `--assets` is served under `<uri_prefix><assets_prefix>` | `src/server.rs:876-899` |
+| `assets_prefix` = `__dufs_v{CARGO_PKG_VERSION}__/` | `src/server.rs:76` |
+| `EditData.href` does **not** include `uri_prefix` | `src/server.rs:1149-1153` |
+| `baseUrl()` in the frontend strips the query string | `assets/index.js` |
+
+## movi-player files
+
+| File here | Upstream path | Size | SHA-256 |
+|---|---|---|---|
+| `movi.js` | `package/dist/element.slim.global.js` | 5 081 314 | `2da55c476a42fb3edd954eb31dbea5d99c0e02a3b3bda26a86c096e6ee027c1d` |
+| `movi.wasm` | `package/dist/movi.wasm` | 5 647 290 | `a90da45449126b10b68ac2b816aa28b9ce43cd7d3e307e7201e0ebd73f92f530` |
+
+npm tarball: `https://registry.npmjs.org/movi-player/-/movi-player-0.4.1.tgz`
+(`dist.shasum` of the 0.4.1 tarball: `b148a24a9072ff37e56537bd6db88d51c712f148`)
+
+Constraints that come from movi-player's own implementation:
+
+- `movi.wasm` must sit **next to** `movi.js`; the wasm URL is derived from
+  `document.currentScript.src`, so the injected script must be a real `<script src>`.
+  The file name of the JS does not matter, the `.wasm` name does.
+- Only the `*.global.js` (IIFE) build is usable — this project has no bundler, so
+  `import` / `require` builds are out.
+- Non-DRM playback renders through a `<canvas>` in the element's shadow root; there is no
+  "use the browser decoder instead" switch.
+- The element loads Inter from Google Fonts via `@import` inside its shadow root.
+
+## Updating movi-player
+
+```bash
+./sync-movi.sh 0.4.2
+node --check index.js            # unaffected, but cheap
+# serve and verify one HEVC-in-mkv and one MPEG-4-in-avi file still play + seek
+```
