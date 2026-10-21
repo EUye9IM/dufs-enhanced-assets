@@ -50,6 +50,16 @@ const IFRAME_FORMATS = [
   ".mp3", ".ogg", ".wav", ".m4a",
 ];
 
+// Video formats that may require movi-player (ffmpeg-wasm) to decode.
+// Only used to decide whether the Play action is shown; it never selects a decoder.
+const MEDIA_VIDEO_FORMATS = [
+  ".mp4", ".m4v", ".mov", ".mkv", ".webm", ".avi", ".wmv", ".flv",
+  ".ts", ".m2ts", ".mpg", ".mpeg", ".rmvb", ".rm", ".3gp", ".ogv",
+];
+
+const MOVI_SCRIPT = "movi.js";
+const MOVI_ELEMENT = "movi-player";
+
 const MAX_SUBPATHS_COUNT = 1000;
 
 const ICONS = {
@@ -62,6 +72,7 @@ const ICONS = {
   edit: `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z"/></svg>`,
   delete: `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M6.854 7.146a.5.5 0 1 0-.708.708L7.293 9l-1.147 1.146a.5.5 0 0 0 .708.708L8 9.707l1.146 1.147a.5.5 0 0 0 .708-.708L8.707 9l1.147-1.146a.5.5 0 0 0-.708-.708L8 8.293 6.854 7.146z"/><path d="M14 14V4.5L9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2zM9.5 3A1.5 1.5 0 0 0 11 4.5h2V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h5.5v2z"/></svg>`,
   view: `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M4 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 1h8a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1"/></svg>`,
+  play: `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M4 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 1h8a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1"/><path d="M6.6 4.7a.6.6 0 0 1 .92-.5l4.1 3.3a.6.6 0 0 1 0 .96l-4.1 3.3a.6.6 0 0 1-.92-.5z"/></svg>`,
 }
 
 /**
@@ -531,6 +542,10 @@ function addPath(file, index) {
   let actionEdit = "";
   let actionView = "";
   let isDir = file.path_type.endsWith("Dir");
+  const isVideo = !isDir && MEDIA_VIDEO_FORMATS.includes(extName(file.name).toLowerCase());
+  const actionPlay = isVideo
+    ? `<a class="action-btn" title="Play video" target="_blank" href="${url}?view">${ICONS.play}</a>`
+    : "";
   if (isDir) {
     url += "/";
     if (DATA.allow_archive) {
@@ -555,11 +570,12 @@ function addPath(file, index) {
     actionDelete = `
     <div onclick="deletePath(${index})" class="action-btn" id="deleteBtn${index}" title="Delete">${ICONS.delete}</div>`;
   }
-  if (!actionEdit && !isDir) {
+  if (!actionEdit && !isDir && !isVideo) {
     actionView = `<a class="action-btn" title="View file" target="_blank" href="${url}?view">${ICONS.view}</a>`;
   }
   let actionCell = `
   <td class="cell-actions">
+    ${actionPlay}
     ${actionDownload}
     ${actionView}
     ${actionMove}
@@ -696,6 +712,61 @@ function setupNewFile() {
   });
 }
 
+/**
+ * Lazily load movi-player. The wasm url is derived from the script's own src,
+ * so the injected script must keep the name "movi.js" next to "movi.wasm".
+ * @returns {Promise<void>}
+ */
+let moviLoadPromise = null;
+function loadMovi() {
+  if (customElements.get(MOVI_ELEMENT)) {
+    return Promise.resolve();
+  }
+  if (moviLoadPromise) {
+    return moviLoadPromise;
+  }
+  const $meta = document.querySelector('meta[name="dufs-assets-prefix"]');
+  const prefix = $meta ? $meta.content : "";
+  moviLoadPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = prefix + MOVI_SCRIPT;
+    script.async = true;
+    script.onload = () => customElements.whenDefined(MOVI_ELEMENT).then(() => resolve(), reject);
+    script.onerror = () => reject(new Error(`Failed to load ${script.src}`));
+    document.head.appendChild(script);
+  });
+  return moviLoadPromise;
+}
+
+/**
+ * Mount movi-player on the viewer page, degrading to a message on failure.
+ * @param {string} url File url without the query string
+ * @param {Element} $slot Placeholder element for status text
+ */
+async function mountVideoPlayer(url, $slot) {
+  $slot.classList.remove("hidden");
+  $slot.textContent = "Loading player…";
+  try {
+    await loadMovi();
+  } catch (err) {
+    console.error(err);
+    $slot.textContent = "Failed to load video player. You can still download the file.";
+    return;
+  }
+
+  const $player = document.createElement(MOVI_ELEMENT);
+  $player.setAttribute("src", url);
+  $player.setAttribute("controls", "");
+  $player.className = "movi-player";
+  $player.addEventListener("error", () => {
+    $slot.classList.remove("hidden");
+    $slot.textContent = "This video could not be decoded. You can still download the file.";
+  }, { once: true });
+  $slot.insertAdjacentElement("afterend", $player);
+  $slot.classList.add("hidden");
+  document.body.classList.add("has-movi-player");
+}
+
 async function setupEditorPage() {
   const url = baseUrl();
 
@@ -737,6 +808,10 @@ async function setupEditorPage() {
     const $notEditable = document.querySelector(".not-editable");
     const url = baseUrl();
     const ext = extName(baseName(url));
+    if (MEDIA_VIDEO_FORMATS.includes(ext.toLowerCase())) {
+      await mountVideoPlayer(url, $notEditable);
+      return;
+    }
     if (IFRAME_FORMATS.find(v => v === ext)) {
       $notEditable.insertAdjacentHTML("afterend", `<iframe src="${url}" sandbox width="100%" height="${window.innerHeight - 100}px"></iframe>`);
     } else {

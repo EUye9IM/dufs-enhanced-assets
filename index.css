@@ -283,6 +283,26 @@ svg {
   font-style: italic;
 }
 
+/* movi-player page: fill the viewport below the sticky header */
+body.has-movi-player {
+  overflow: hidden;
+}
+
+body.has-movi-player .editor-page {
+  height: calc(100vh - 3.1em);
+}
+
+.movi-player {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: #000;
+}
+
+.movi-player:not(:defined) {
+  display: none;
+}
+
 .retry-btn {
   cursor: pointer;
 }
