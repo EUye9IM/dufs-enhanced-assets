@@ -102,6 +102,11 @@ Rules:
   letting the user conclude the player is broken.
 - `http://localhost` **is** secure; `http://192.168.x.x` is not. A self-signed certificate
   only helps once the client trusts it — an untrusted cert still means an insecure context.
+- **Corollary that surprises people**: `isSecureContext` follows the *scheme*, not the
+  certificate. `https://` with an untrusted certificate is still a secure context, so
+  WebCodecs works and the player's warning correctly does not appear — while the browser
+  still labels the page "Not secure" (that is about authentication, not capabilities).
+  JavaScript cannot detect certificate trust, so no code can bridge the two signals.
 - Do not try to solve this from the page: a web page cannot install a CA, and dufs cannot
   take a key generated in a browser. The supported path is `scripts/gen-tls.sh` (private CA
   + server cert) plus the trust page at `assets/trust/index.html`, which is served by the
@@ -110,7 +115,39 @@ Rules:
 - Serving `ca.crt` is safe — it is a public key. Only `tls/ca.key` / `tls/dufs.key` are
   secrets.
 
-## 6. Third-party loading
+## 6. Player page layout
+
+`body.has-movi-player` is the one scope where we take over the page's vertical layout. Two
+rules, both learned from a real bug report:
+
+| Rule | Why |
+|---|---|
+| Never hard-code the dufs header height | `.head` is `display: flex; flex-wrap: wrap` — a long breadcrumb makes it 97 px instead of 49 px. The old `height: calc(100vh - 3.1em)` assumed one row and pushed ~47 px of the player (its whole control bar) below the fold. |
+| Every level between `<body>` and the player must be a flex item with a definite height | `body > .head`, `body > .main`, `.main > .editor-page`. miss one and the player falls back to its inline `aspect-ratio` (`width × 9/16`), leaving a letterboxed box plus dead space instead of filling the page. |
+
+Current shape:
+
+```css
+body.has-movi-player { display: flex; flex-direction: column; height: 100dvh; overflow: hidden }
+body.has-movi-player .head { flex: 0 0 auto }
+body.has-movi-player .main { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column }
+body.has-movi-player .editor-page { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden }
+body.has-movi-player .editor-page > .not-editable { flex: 0 0 auto }   /* error message keeps its space */
+body.has-movi-player .editor-page > .movi-player { flex: 1 1 0; min-height: 0 }
+```
+
+Notes:
+
+- movi-player writes an inline `aspect-ratio` and `--movi-player-*` custom properties on the
+  host element. Do **not** try to override them with `!important`; give it a definite height
+  instead and its own canvas letterboxes the frame correctly (verified with 4:3 content).
+- `100dvh` with a `100vh` fallback: a dynamic mobile toolbar otherwise leaves the control bar
+  under the toolbar.
+- Verification is measurable, not visual: `.movi-player` bottom edge must equal
+  `innerHeight` (±1 px) for a one-row header, a two-row header (deep path) and a three-row
+  header (narrow window), and `document.body.scrollHeight` must equal `innerHeight`.
+
+## 7. Third-party loading
 
 - Load heavy third-party assets **lazily**, only on the page that needs them. The
   directory page must stay byte-identical to upstream.
@@ -123,7 +160,7 @@ Rules:
   `<script>` must be a real `src` script and `fetch()` must not see credentials in that
   URL.
 
-## 7. Verification recipe
+## 8. Verification recipe
 
 There is no test suite. Verification is manual, against a real dufs binary.
 
@@ -158,7 +195,7 @@ Checklist per change:
 | Credentials in the URL break the player | `fetch()` cannot construct a request from a URL containing credentials, and movi derives its wasm URL from `document.currentScript.src`. Use the browser's auth cache. |
 | Shared browser sessions | When automating, use a dedicated session name so parallel work does not hijack the page. |
 
-## 8. Upstream bookkeeping
+## 9. Upstream bookkeeping
 
 `UPSTREAM.md` records the dufs and movi-player versions, the exact local diff against
 upstream `assets/`, and the sha256 of both movi files. Any change to either upstream must

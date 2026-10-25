@@ -283,14 +283,53 @@ svg {
   font-style: italic;
 }
 
-/* movi-player page: fill the viewport below the sticky header */
+/* movi-player page: the player takes exactly the space left below the header.
+   The header height is NOT hard-coded — `.head` is a wrapping flex row, so a long
+   breadcrumb makes it two or three rows tall. A fixed `calc(100vh - 3.1em)` assumed
+   one row and pushed the bottom of the player (control bar included) off-screen.
+
+   Every level between <body> and the player has to be a flex item: otherwise the
+   player's own inline `aspect-ratio` decides its height (width × 9/16) and the page
+   ends up with a letterboxed box plus a dead strip below it. */
 body.has-movi-player {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh; /* a dynamic mobile toolbar shrinks the visual viewport */
   overflow: hidden;
+}
+
+body.has-movi-player .head {
+  flex: 0 0 auto;
+}
+
+body.has-movi-player .main {
+  flex: 1 1 0; /* basis 0: the flex container decides, so the height is definite */
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 body.has-movi-player .editor-page {
   position: relative;
-  height: calc(100vh - 3.1em);
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0; /* let the flex item shrink instead of overflowing */
+  height: auto;
+  overflow: hidden;
+}
+
+/* The "could not be decoded" slot only takes space when it is actually shown;
+   the player gives up the same amount instead of overflowing the page. */
+body.has-movi-player .editor-page>.not-editable {
+  flex: 0 0 auto;
+}
+
+body.has-movi-player .editor-page>.movi-player {
+  flex: 1 1 0;
+  min-height: 0;
+  height: auto;
 }
 
 .movi-player {

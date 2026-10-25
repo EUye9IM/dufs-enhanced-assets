@@ -91,6 +91,16 @@ During playback the same fetches slow down because the main thread is busy decod
 When the player detects `!isSecureContext`, it shows a warning above the video that links to
 the trust page described below.
 
+#### Why there is no warning on an *untrusted* https page
+
+`isSecureContext` follows the **scheme**, not the certificate. Opening
+`https://192.168.1.100:24601` and clicking through the warning still gives a secure context:
+WebCodecs is available, hardware decoding runs, and the player correctly shows no warning.
+Chrome keeps labelling the page *Not secure* — that is about **authentication** (anyone on
+the LAN could impersonate the server), not about what APIs the page gets. The two indicators
+are unrelated, and JavaScript cannot detect certificate trust, so the only way to clear
+*Not secure* is to install the CA as described below.
+
 ### Fix 1 — serve dufs over HTTPS (recommended)
 
 One command mints all the TLS material:
