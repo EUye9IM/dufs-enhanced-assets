@@ -2,3 +2,10 @@
 /.agents/
 /.pi/
 /skills-lock.json
+
+# Generated TLS material (scripts/gen-tls.sh). Private keys must never be committed.
+# ca.crt / the iOS profile are re-generated per deployment, and only exist so dufs can
+# serve them to devices on the same LAN.
+/tls/
+/assets/trust/ca.crt
+/assets/trust/*.mobileconfig

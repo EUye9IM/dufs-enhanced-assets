@@ -2,8 +2,8 @@
 
 > Scope: everything in this repository. This project is **not** a web app — it is a
 > replaceable static asset pack for [dufs](https://github.com/sigoden/dufs), mounted at
-> runtime with `dufs --assets <this-repo>`. These rules are the ones that will actually
-> break the deployment if ignored.
+> runtime with `dufs --assets <this-repo>/assets`. These rules are the ones that will
+> actually break the deployment if ignored.
 
 ---
 
@@ -14,8 +14,10 @@
 | Never modify dufs Rust source | The whole value of this repo is that upgrading dufs means swapping a binary, not rebasing a fork. |
 | No build step: no `package.json`, no `node_modules`, no bundler, no TypeScript | dufs loads `index.html` / `index.js` / `index.css` verbatim. A build step would also break `git archive` / tarball deployment. |
 | Third-party libraries must be a `*.global.js` IIFE | There is no module loader. `import` / `require` builds cannot be used. |
-| Never hand-edit `movi.js` / `movi.wasm` | They must stay byte-identical to the upstream npm dist so a version bump is a plain diff. Use `sync-movi.sh`. |
+| Never hand-edit `assets/movi.js` / `assets/movi.wasm` | They must stay byte-identical to the upstream npm dist so a version bump is a plain diff. Use `sync-movi.sh`. |
 | Never hard-code the asset URL prefix | See §2. |
+| **Nothing private under `assets/`** | That directory is an HTTP namespace: every file in it is served under `/__dufs_v<ver>__/`. Certificates and the trust page are fine there (public keys); private keys, dumps, notes never are. `tls/` sits *next to* `assets/`, not inside it, and `scripts/gen-tls.sh` fails if a PEM private key appears under `assets/`. |
+| Only `assets/` is ever passed to `--assets` | Everything else (`scripts/`, `tls/`, docs, licences) must stay unservable by construction, not by discipline. |
 
 ## 2. Asset URL prefix (the #1 source of 404s)
 
@@ -100,6 +102,13 @@ Rules:
   letting the user conclude the player is broken.
 - `http://localhost` **is** secure; `http://192.168.x.x` is not. A self-signed certificate
   only helps once the client trusts it — an untrusted cert still means an insecure context.
+- Do not try to solve this from the page: a web page cannot install a CA, and dufs cannot
+  take a key generated in a browser. The supported path is `scripts/gen-tls.sh` (private CA
+  + server cert) plus the trust page at `assets/trust/index.html`, which is served by the
+  same dufs instance so no file has to be copied between devices. The in-page hint links to
+  it; keep that link working (prefix from the meta tag, never hard-coded).
+- Serving `ca.crt` is safe — it is a public key. Only `tls/ca.key` / `tls/dufs.key` are
+  secrets.
 
 ## 6. Third-party loading
 
@@ -127,7 +136,7 @@ tar xzf dufs.tgz
 ffmpeg -f lavfi -i testsrc2=size=640x360:rate=25 -t 5 -c:v libx265 -pix_fmt yuv420p -tag:v hvc1 hevc.mkv
 ffmpeg -f lavfi -i testsrc2=size=640x360:rate=25 -t 5 -c:v mpeg4 mpeg4.avi
 
-./dufs /tmp/dufs-fixtures --assets "$PWD" --bind 127.0.0.1 --port 5000
+./dufs /tmp/dufs-fixtures --assets "$PWD/assets" --bind 127.0.0.1 --port 5000
 ```
 
 Checklist per change:
@@ -136,12 +145,14 @@ Checklist per change:
 - [ ] text page: editor still works, no heavy assets requested
 - [ ] `?view` on a video: plays, seeks
 - [ ] failure path: rename the player JS to force 404 → readable message, download works
+- [ ] `?view` over plain HTTP still shows the hint, and its link resolves to `.../trust/`
 - [ ] `git status` touches only the intended files
 
 ### Gotchas that cost time
 
 | Gotcha | Detail |
 |---|---|
+| `--assets` has no directory index | The assets handler resolves *files*; a trailing-slash URL for a directory under `--assets` returns `500 Is a directory (os error 21)`. Link `trust/index.html`, never `trust/`. |
 | `curl` gets the noscript page | dufs sniffs the UA and serves a server-rendered listing for `curl`/`wget`. Pass a browser UA when checking the HTML shell. `?view` is unaffected. |
 | `--auth` syntax | `user:pass@/path:rw`. `user:pass` alone is rejected with `Invalid auth`. |
 | Credentials in the URL break the player | `fetch()` cannot construct a request from a URL containing credentials, and movi derives its wasm URL from `document.currentScript.src`. Use the browser's auth cache. |
@@ -151,4 +162,6 @@ Checklist per change:
 
 `UPSTREAM.md` records the dufs and movi-player versions, the exact local diff against
 upstream `assets/`, and the sha256 of both movi files. Any change to either upstream must
-update that file in the same commit.
+update that file in the same commit. The same applies to the files that exist only here:
+`scripts/gen-tls.sh` and `assets/trust/` are local additions with no upstream counterpart,
+and `UPSTREAM.md` lists them separately.

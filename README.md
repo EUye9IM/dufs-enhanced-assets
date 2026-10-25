@@ -8,20 +8,29 @@ back to a download or show a black frame.
 **This repository contains only static assets. It never patches dufs.**
 
 ```
-index.html  index.css  index.js  favicon.ico   ← dufs frontend, modified
-movi.js  movi.wasm                             ← movi-player 0.4.1 dist, byte-identical
+assets/            ← the only directory passed to dufs --assets
+  index.html  index.css  index.js  favicon.ico   ← dufs frontend, modified
+  movi.js  movi.wasm                             ← movi-player 0.4.1 dist, byte-identical
+  trust/                                         ← trust page + published CA certificate
+scripts/gen-tls.sh ← mints the local TLS material for HTTPS
+sync-movi.sh       ← moves movi-player to another version
 ```
 
 ---
 
 ## Deploy
 
-`--assets` is **mandatory**. Without it dufs serves its embedded copies of
-`index.js` / `index.css` / `favicon.ico` only, and `movi.js` / `movi.wasm` return 404.
+`--assets` is **mandatory**, and it must point at the `assets/` subdirectory. Without it
+dufs serves its embedded copies of `index.js` / `index.css` / `favicon.ico` only, and
+`movi.js` / `movi.wasm` return 404.
 
 ```bash
-dufs /srv/files --assets /path/to/dufs-enhanced-assets --allow-upload --allow-delete
+dufs /srv/files --assets /path/to/dufs-enhanced-assets/assets --allow-upload --allow-delete
 ```
+
+The rest of the repository (`scripts/`, `tls/`, the docs, the licences) deliberately sits
+*outside* `assets/`, because everything inside `assets/` is served over HTTP. Keep it that
+way: the directory is a public namespace, so no private key may ever live in it.
 
 Any file inside the `--assets` directory is served under the versioned prefix
 `/__dufs_v<dufs-version>__/`, e.g. `/__dufs_v0.47.0__/movi.js`. Never hard-code that
@@ -79,43 +88,83 @@ Network was never the constraint: fetching a single 8 MB range from the same pag
 0.51 s (**15.7 MB/s**) when the player is paused, while realtime playback needs 0.73 MB/s.
 During playback the same fetches slow down because the main thread is busy decoding.
 
-When the player detects `!isSecureContext`, it now shows this warning above the video.
+When the player detects `!isSecureContext`, it shows a warning above the video that links to
+the trust page described below.
 
 ### Fix 1 — serve dufs over HTTPS (recommended)
 
-```bash
-# Self-signed certificate valid for one IP + hostname (OpenSSL 1.1.1+ for -addext)
-openssl req -x509 -newkey rsa:2048 -sha256 -days 3650 -nodes \
-  -keyout dufs.key -out dufs.crt \
-  -subj "/CN=dufs-lan" \
-  -addext "subjectAltName=IP:192.168.1.100,DNS:tiny04"
+One command mints all the TLS material:
 
-# dufs serves TLS natively — no reverse proxy needed
-dufs /dl --assets /path/to/dufs-enhanced-assets \
-  --tls-cert dufs.crt --tls-key dufs.key \
+```bash
+./scripts/gen-tls.sh
+#   --host <ip|name>    add SAN entries if autodetection misses yours (repeatable)
+#   --force             re-issue the server certificate even if still valid
+#   --verify            only re-run the sanity checks
+```
+
+It creates a **private CA** (10 years) plus a server certificate (825 days) whose SAN covers
+every LAN address the machine currently has, its hostname, and loopback, then prints the
+exact dufs invocation:
+
+```bash
+dufs /srv/files --assets /path/to/dufs-enhanced-assets/assets \
+  --tls-cert tls/dufs.crt --tls-key tls/dufs.key \
   --bind 0.0.0.0 --port 24601
 ```
 
-**The certificate must be trusted**, otherwise the browser still treats the page as insecure
-and WebCodecs stays disabled. Trust it on each client once:
+Why a CA instead of a single self-signed certificate: browsers ignore the CN and match the
+SAN against the address you actually typed, so a self-signed certificate stops working the
+moment the LAN IP changes — and every device has to re-trust it. With a private CA you
+install the CA once, and re-running `./scripts/gen-tls.sh` re-issues only the server
+certificate, invisibly to every device.
 
-| Platform | Command |
+The CA is generated on the server and never leaves it. No public CA, no ACME, no external
+dependency. `tls/` is gitignored; the only published material is the CA **certificate**
+(a public key) and the iOS profile.
+
+**Then trust the CA, once per device.** Nothing has to be copied between machines — this page
+serves the certificate and the per-platform steps, and the player's warning links straight to
+it:
+
+```
+https://<lan-ip>:24601/__dufs_v<dufs-version>__/trust/index.html
+```
+
+The first visit passes through the browser's certificate warning (nothing is trusted yet):
+proceed once, install the CA, reload — the warning is gone for good.
+
+| Platform | One-time install |
 |---|---|
-| Linux | `sudo cp dufs.crt /usr/local/share/ca-certificates/dufs-lan.crt && sudo update-ca-certificates` (then restart the browser) |
-| macOS | `sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain dufs.crt` |
-| Windows | `certmgr.msc` → Trusted Root Certification Authorities → Import |
-| Firefox | has its own store: Settings → Privacy → Certificates → View Certificates → Import |
+| Linux | `sudo cp ca.crt /usr/local/share/ca-certificates/dufs-lan.crt && sudo update-ca-certificates`; Chromium/Firefox also read NSS: `certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n dufs-lan -i ca.crt`; restart the browser |
+| macOS | double-click `ca.crt`, then Keychain Access → the certificate → Trust → *Always Trust*; or `sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ca.crt` |
+| Windows | `certmgr.msc` → Trusted Root Certification Authorities → Import (not "Personal") |
+| Android | Settings → Security → Encryption & credentials → Install a certificate → **CA certificate**. Chrome trusts user CAs; Firefox for Android does not |
+| iOS / iPadOS | install the `.mobileconfig` profile, **then** Settings → General → About → Certificate Trust Settings → enable full trust. Both steps are required |
+| Firefox (desktop) | has its own trust store: Settings → Privacy & Security → Certificates → View Certificates → Import, tick "Trust this CA to identify websites" |
+
+> **"Proceed anyway" is not trust.** Clicking through the warning only bypasses it for that
+> session, keeps the origin marked insecure, and has to be repeated. Only installing the CA
+> changes the outcome. Verify the CA fingerprint first if the network is not fully trusted:
+> `openssl x509 -noout -fingerprint -sha256 -in assets/trust/ca.crt` must match the
+> `CA SHA-256` line printed by `scripts/gen-tls.sh`.
+
+Not fixable from the page: a web page cannot install a certificate into the OS trust store,
+and the server's private key cannot be generated in the browser — dufs loads it from disk at
+startup. Trust installation stays a one-time manual step per device.
 
 Verify afterwards — on the player page's console:
 
 ```js
-isSecureContext   // true
+isSecureContext      // true
 typeof VideoDecoder  // "function"
 ```
 
-Alternatives if you would rather not manage a self-signed cert: use `mkcert` (local CA),
-put dufs behind a reverse proxy with a real certificate, or front it with something like
-Caddy that issues its own local CA.
+A publicly-trusted name (real domain, overlay network, tunnel) would remove the install step
+entirely, but that is deliberately out of scope here — this pack is meant to work on a LAN
+with no external dependency. The zero-install escape hatch is a loopback origin:
+`ssh -L 24601:localhost:24601 user@server`, then open `http://localhost:24601` — a loopback
+origin is already a secure context, so WebCodecs works with no certificate at all. It only
+helps the machine holding the tunnel.
 
 ### Fix 2 — client-side flag (quick, per-machine)
 
@@ -151,40 +200,47 @@ pack exists), and it will silently drop audio codecs it cannot decode — the `D
 | 4K on low-end devices | Not tested; wasm memory pressure is real. |
 | Files > 4 GB | Not tested (32-bit offset risk inside the wasm demuxer). |
 | Basic/Digest auth | Verified working for playback and seek. Note that credentials embedded in the URL (`http://u:p@host/`) break it: movi derives `movi.wasm` from `document.currentScript.src` and `fetch()` rejects URLs containing credentials. Normal auth flows (browser prompt + credential cache) are fine. |
-| Plain-HTTP LAN playback | Slow by design until served over HTTPS — see [Performance: HTTPS is required for hardware decoding](#performance-https-is-required-for-hardware-decoding). The player shows an in-page warning when it detects `!isSecureContext`. |
+| Plain-HTTP LAN playback | Slow by design until served over HTTPS — see [Performance: HTTPS is required for hardware decoding](#performance-https-is-required-for-hardware-decoding). The player shows an in-page warning linking to a trust page when it detects `!isSecureContext`. |
 
 ## Layout
 
 ```
-index.html            dufs shell + <meta name="dufs-assets-prefix">
-index.js              dufs frontend + play action + lazy movi-player mount
-index.css             dufs styles + player sizing
-favicon.ico
-movi.js               movi-player 0.4.1 dist/element.slim.global.js
-movi.wasm             movi-player 0.4.1 dist/movi.wasm
-sync-movi.sh          re-download both movi files for another version
-UPSTREAM.md           exact upstream versions + how to sync dufs assets
-NOTICE.md             third-party licences
-LICENSE-MIT           dufs assets
-LICENSE-APACHE        dufs assets
-LICENSE-LGPL-2.1.txt  FFmpeg inside movi.wasm
+assets/                  ← passed to dufs --assets; everything here is served over HTTP
+  index.html             dufs shell + <meta name="dufs-assets-prefix">
+  index.js               dufs frontend + play action + lazy movi-player mount
+  index.css              dufs styles + player sizing + insecure-context hint
+  favicon.ico
+  movi.js                movi-player 0.4.1 dist/element.slim.global.js
+  movi.wasm              movi-player 0.4.1 dist/movi.wasm
+  trust/index.html       "trust this server" page: what/why + per-platform steps
+  trust/ca.crt           generated by scripts/gen-tls.sh, gitignored (public key)
+  trust/*.mobileconfig   generated iOS profile, gitignored (public key)
+scripts/gen-tls.sh       mint the private CA + server certificate + iOS profile
+tls/                     generated TLS material, gitignored, NEVER served
+  ca.key  ca.crt  dufs.key  dufs.crt
+sync-movi.sh             re-download both movi files for another version
+UPSTREAM.md              exact upstream versions + how to sync dufs assets
+NOTICE.md                third-party licences
+LICENSE-MIT              dufs assets
+LICENSE-APACHE           dufs assets
+LICENSE-LGPL-2.1.txt     FFmpeg inside movi.wasm
 ```
 
 ## Updating movi-player
 
 ```bash
-./sync-movi.sh 0.4.2        # download, verify, replace movi.js + movi.wasm
+./sync-movi.sh 0.4.2        # download, verify, replace assets/movi.js + assets/movi.wasm
 git diff --stat             # expect exactly those two files
 ```
 
 ## Large files
 
-`movi.js` (4.8 MB) and `movi.wasm` (5.4 MB) are tracked as ordinary files. That keeps
-`git clone` free of any extra tooling and lets `git archive` / tarball deployment work.
+`assets/movi.js` (4.8 MB) and `assets/movi.wasm` (5.4 MB) are tracked as ordinary files. That
+keeps `git clone` free of any extra tooling and lets `git archive` / tarball deployment work.
 Every movi upgrade adds ~10 MB to history. If that becomes a problem, convert once with:
 
 ```bash
-git lfs migrate import --include="movi.js,movi.wasm"
+git lfs migrate import --include="assets/movi.js,assets/movi.wasm"
 ```
 
 `sync-movi.sh` keeps working unchanged after such a conversion.

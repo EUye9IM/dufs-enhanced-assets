@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/frontend/dufs-asset-pack.md", "reason": "hard constraints of the asset pack: no build step, versioned asset prefix, --assets semantics"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "quality bar for scripts and docs in this repo"}
+{"file": ".trellis/tasks/10-25-lan-tls/prd.md", "reason": "requirements + acceptance criteria A1-A10"}
+{"file": ".trellis/tasks/10-25-lan-tls/design.md", "reason": "layout decision, CA/leaf split, gen-tls.sh contract, docs change table"}
+{"file": ".trellis/tasks/10-25-lan-tls/implement.md", "reason": "ordered checklist and the exact validation commands to run"}
+{"file": "UPSTREAM.md", "reason": "local-diff table lists every deviation from upstream dufs assets; paths change with the assets/ move"}

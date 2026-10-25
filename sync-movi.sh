@@ -17,6 +17,13 @@ DIST_JS="package/dist/element.slim.global.js"
 DIST_WASM="package/dist/movi.wasm"
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ASSETS_DIR="$REPO_DIR/assets"
+
+if [ ! -d "$ASSETS_DIR" ]; then
+  echo "error: $ASSETS_DIR is missing — the served files live in assets/, which is the" >&2
+  echo "       only directory dufs is pointed at with --assets" >&2
+  exit 1
+fi
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
 
@@ -41,7 +48,7 @@ done
 tar xzf "$WORK_DIR/movi-player.tgz" -C "$WORK_DIR" "$DIST_JS" "$DIST_WASM"
 
 # Sanity checks before overwriting the committed copies.
-for pair in "$WORK_DIR/$DIST_JS:$REPO_DIR/movi.js" "$WORK_DIR/$DIST_WASM:$REPO_DIR/movi.wasm"; do
+for pair in "$WORK_DIR/$DIST_JS:$ASSETS_DIR/movi.js" "$WORK_DIR/$DIST_WASM:$ASSETS_DIR/movi.wasm"; do
   src="${pair%%:*}"
   dst="${pair##*:}"
   size=$(wc -c < "$src")
@@ -56,7 +63,7 @@ done
 cat <<EOF
 
 ==> Done. Next steps:
-    git diff --stat                 # expect exactly movi.js + movi.wasm
+    git diff --stat                 # expect exactly assets/movi.js + assets/movi.wasm
     # serve and check one HEVC-in-mkv and one MPEG-4-in-avi still play and seek
     # then update UPSTREAM.md (version, sizes, sha256) and the pin in this script
 EOF

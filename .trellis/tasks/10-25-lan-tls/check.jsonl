@@ -1,0 +1,4 @@
+{"file": ".trellis/tasks/10-25-lan-tls/prd.md", "reason": "acceptance criteria to verify one by one"}
+{"file": ".trellis/tasks/10-25-lan-tls/design.md", "reason": "invariants: no secret under assets/, PKCS#8 key, SAN required, idempotency"}
+{"file": ".trellis/tasks/10-25-lan-tls/implement.md", "reason": "validation command block to re-run"}
+{"file": ".trellis/spec/frontend/dufs-asset-pack.md", "reason": "regression surface: asset prefix, page states, no build step"}
