@@ -34,3 +34,17 @@
 - "No yellow bar on https with an untrusted cert" is correct behaviour: isSecureContext
   follows the scheme, so WebCodecs works and only the browser's "Not secure" label remains.
   Documented in README + spec; it cannot be detected from JS.
+
+## 2026-10-28 — 10-28-cert-trust-hint
+
+- `isSecureContext` cannot answer "is this certificate trusted" — it only looks at the scheme.
+  On a TLS-only dufs the old hint was dead code, so a guest who clicked through the interstitial
+  was on an unauthenticated connection with no warning at all.
+- The discriminator that works: register a service worker. Its script fetch does not inherit the
+  click-through exception, so it fails with "An SSL certificate error occurred" precisely when
+  the cert is untrusted. Verified both directions on one machine (untrusted profile vs
+  `--ignore-certificate-errors-spki-list=<leaf SPKI>` as the "CA installed" stand-in).
+- Fail safe: match the error message, not the failure. A 404 probe file must land on "unknown" →
+  silent; tested by renaming the file away on the trusted profile.
+- Rejected: cross-origin probes (`no-cors` always resolves opaque), a second listener, CT logs.
+- Left `movi`'s `mov_text` gap as backlog task 10-28-movi-movtext-subs with the full evidence.
