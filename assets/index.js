@@ -59,6 +59,7 @@ const MEDIA_VIDEO_FORMATS = [
 
 const MOVI_SCRIPT = "movi.js";
 const MOVI_ELEMENT = "movi-player";
+const TRUST_PROBE = "trust/probe-sw.js";
 
 const MAX_SUBPATHS_COUNT = 1000;
 
@@ -713,6 +714,44 @@ function setupNewFile() {
 }
 
 /**
+ * Base path of the embedded assets, as rendered by dufs.
+ * @returns {string}
+ */
+function assetsPrefix() {
+  const $meta = document.querySelector('meta[name="dufs-assets-prefix"]');
+  return $meta ? $meta.content : "";
+}
+
+/**
+ * Report whether the browser trusts this server's certificate.
+ *
+ * Nothing in the platform exposes certificate trust: `isSecureContext` only looks at
+ * the scheme, and an ordinary subresource request still succeeds on a page the user
+ * clicked through. A service worker script is the one same-origin fetch that ignores
+ * the click-through exception, so registering it is both the probe and the answer.
+ * Anything we cannot interpret is reported as "unknown" and stays silent, so a broken
+ * deployment can never accuse a correctly configured visitor.
+ *
+ * @returns {Promise<"trusted"|"untrusted"|"insecure"|"unknown">}
+ */
+async function detectCertificateTrust() {
+  if (!window.isSecureContext) {
+    return "insecure";
+  }
+  if (!("serviceWorker" in navigator)) {
+    return "unknown";
+  }
+  try {
+    const registration = await navigator.serviceWorker.register(assetsPrefix() + TRUST_PROBE);
+    registration.unregister().catch(() => { });
+    return "trusted";
+  } catch (err) {
+    const message = String((err && err.message) || "");
+    return /certificate|ssl/i.test(message) ? "untrusted" : "unknown";
+  }
+}
+
+/**
  * Lazily load movi-player. The wasm url is derived from the script's own src,
  * so the injected script must keep the name "movi.js" next to "movi.wasm".
  * @returns {Promise<void>}
@@ -725,8 +764,7 @@ function loadMovi() {
   if (moviLoadPromise) {
     return moviLoadPromise;
   }
-  const $meta = document.querySelector('meta[name="dufs-assets-prefix"]');
-  const prefix = $meta ? $meta.content : "";
+  const prefix = assetsPrefix();
   moviLoadPromise = new Promise((resolve, reject) => {
     const script = document.createElement("script");
     script.src = prefix + MOVI_SCRIPT;
@@ -766,25 +804,21 @@ async function mountVideoPlayer(url, $slot) {
   $slot.classList.add("hidden");
   document.body.classList.add("has-movi-player");
 
-  // WebCodecs (hardware decoding) requires a secure context. Over plain HTTP on a
-  // LAN address movi-player can only fall back to wasm software decoding, which
-  // cannot keep up with HD video. Tell the user instead of letting it look broken,
-  // and link to the trust page served next to this file (setup instructions +
-  // the CA certificate to install).
-  if (!window.isSecureContext) {
-    const $meta = document.querySelector('meta[name="dufs-assets-prefix"]');
-    const prefix = $meta ? $meta.content : "";
+  detectCertificateTrust().then((trust) => {
+    if (trust !== "untrusted") {
+      return;
+    }
     const $hint = document.createElement("div");
     const $link = document.createElement("a");
     $hint.className = "movi-hint";
-    $hint.textContent = "Insecure connection: hardware decoding is unavailable, so the player uses software decoding. HD video may stutter — ";
-    $link.href = prefix + "trust/index.html";
+    $hint.textContent = "This browser does not trust this server's certificate, so anyone on this network could impersonate it. Playback is unaffected — ";
+    $link.href = assetsPrefix() + "trust/index.html";
     $link.target = "_blank";
     $link.rel = "noopener";
-    $link.textContent = "set up HTTPS";
-    $hint.append($link, " for smooth playback.");
+    $link.textContent = "install the certificate";
+    $hint.append($link, " to remove the warning.");
     $player.insertAdjacentElement("afterend", $hint);
-  }
+  });
 }
 
 async function setupEditorPage() {

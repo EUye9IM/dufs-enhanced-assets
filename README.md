@@ -88,18 +88,30 @@ Network was never the constraint: fetching a single 8 MB range from the same pag
 0.51 s (**15.7 MB/s**) when the player is paused, while realtime playback needs 0.73 MB/s.
 During playback the same fetches slow down because the main thread is busy decoding.
 
-When the player detects `!isSecureContext`, it shows a warning above the video that links to
-the trust page described below.
+When the player is opened over a connection the browser does not trust, it shows a warning above
+the video that links to the trust page described below.
 
-#### Why there is no warning on an *untrusted* https page
+#### How the player notices an untrusted certificate
 
-`isSecureContext` follows the **scheme**, not the certificate. Opening
-`https://192.168.1.100:24601` and clicking through the warning still gives a secure context:
-WebCodecs is available, hardware decoding runs, and the player correctly shows no warning.
-Chrome keeps labelling the page *Not secure* — that is about **authentication** (anyone on
-the LAN could impersonate the server), not about what APIs the page gets. The two indicators
-are unrelated, and JavaScript cannot detect certificate trust, so the only way to clear
-*Not secure* is to install the CA as described below.
+No web API exposes certificate trust: `isSecureContext` only looks at the **scheme**, so a page
+reached by clicking through the browser warning is still a secure context and everything works —
+WebCodecs, hardware decoding, the works. That is why the player cannot simply ask "am I safe?".
+
+What it does instead is register a two-line service worker (`assets/trust/probe-sw.js`). The
+service worker script fetch is the one same-origin request that does **not** inherit the
+click-through exception, so registration fails with `An SSL certificate error occurred` exactly
+when the certificate is untrusted, and succeeds when the CA is installed. The registration is
+unregistered immediately; nothing is cached or intercepted.
+
+| Outcome | Hint |
+|---|---|
+| registration threw with a certificate/SSL message | shown, links to the trust page |
+| registration succeeded (CA installed) | hidden |
+| no service worker API, or the failure was something else | hidden — a broken deployment never accuses a correctly configured visitor |
+
+Consequence worth knowing: Chrome still labels such a page *Not secure*, and it is right to —
+that is about **authentication** (anyone on the LAN can impersonate the server), not about what
+the page is allowed to do. Installing the CA clears both the browser label and this hint.
 
 ### Fix 1 — serve dufs over HTTPS (recommended)
 
@@ -153,8 +165,9 @@ proceed once, install the CA, reload — the warning is gone for good.
 | Firefox (desktop) | has its own trust store: Settings → Privacy & Security → Certificates → View Certificates → Import, tick "Trust this CA to identify websites" |
 
 > **"Proceed anyway" is not trust.** Clicking through the warning only bypasses it for that
-> session, keeps the origin marked insecure, and has to be repeated. Only installing the CA
-> changes the outcome. Verify the CA fingerprint first if the network is not fully trusted:
+> session, leaves the origin unauthenticated, and has to be repeated — the player keeps showing
+> its warning on every visit until the CA is installed. Verify the CA fingerprint first if the
+> network is not fully trusted:
 > `openssl x509 -noout -fingerprint -sha256 -in assets/trust/ca.crt` must match the
 > `CA SHA-256` line printed by `scripts/gen-tls.sh`.
 
@@ -165,8 +178,9 @@ startup. Trust installation stays a one-time manual step per device.
 Verify afterwards — on the player page's console:
 
 ```js
-isSecureContext      // true
-typeof VideoDecoder  // "function"
+isSecureContext                    // true (this says nothing about the certificate)
+typeof VideoDecoder                // "function"
+document.querySelector('.movi-hint')  // null once the CA is trusted
 ```
 
 A publicly-trusted name (real domain, overlay network, tunnel) would remove the install step
@@ -210,7 +224,7 @@ pack exists), and it will silently drop audio codecs it cannot decode — the `D
 | 4K on low-end devices | Not tested; wasm memory pressure is real. |
 | Files > 4 GB | Not tested (32-bit offset risk inside the wasm demuxer). |
 | Basic/Digest auth | Verified working for playback and seek. Note that credentials embedded in the URL (`http://u:p@host/`) break it: movi derives `movi.wasm` from `document.currentScript.src` and `fetch()` rejects URLs containing credentials. Normal auth flows (browser prompt + credential cache) are fine. |
-| Plain-HTTP LAN playback | Slow by design until served over HTTPS — see [Performance: HTTPS is required for hardware decoding](#performance-https-is-required-for-hardware-decoding). The player shows an in-page warning linking to a trust page when it detects `!isSecureContext`. |
+| Plain-HTTP LAN playback | Slow by design until served over HTTPS — see [Performance: HTTPS is required for hardware decoding](#performance-https-is-required-for-hardware-decoding). Over plain HTTP the player shows no warning at all: this deployment is TLS-only, and an insecure origin cannot run the service worker probe that would detect anything. |
 
 ## Layout
 
@@ -218,7 +232,7 @@ pack exists), and it will silently drop audio codecs it cannot decode — the `D
 assets/                  ← passed to dufs --assets; everything here is served over HTTP
   index.html             dufs shell + <meta name="dufs-assets-prefix">
   index.js               dufs frontend + play action + lazy movi-player mount
-  index.css              dufs styles + player sizing + insecure-context hint
+  index.css              dufs styles + player sizing + certificate-trust hint
   favicon.ico
   movi.js                movi-player 0.4.1 dist/element.slim.global.js
   movi.wasm              movi-player 0.4.1 dist/movi.wasm

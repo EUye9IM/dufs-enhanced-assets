@@ -343,7 +343,7 @@ body.has-movi-player .editor-page>.movi-player {
   display: none;
 }
 
-/* Shown only on insecure origins, where WebCodecs is unavailable. */
+/* Certificate-trust hint, mounted over the player by mountVideoPlayer(). */
 .movi-hint {
   position: absolute;
   top: 0.75em;

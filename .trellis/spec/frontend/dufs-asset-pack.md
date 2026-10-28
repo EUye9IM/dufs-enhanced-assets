@@ -85,35 +85,61 @@ whitelist is fine for choosing UI**, and is **not** acceptable as a decoder deci
 Extensions do not describe codecs (`.mp4` can be HEVC, `.mkv` can be H.264), and a wrong
 guess reproduces the black-frame bug this project exists to fix.
 
-## 5. Secure context gating (WebCodecs)
+## 5. Secure context vs. certificate trust
 
-WebCodecs (`VideoDecoder` / `AudioDecoder`) is `[SecureContext]`. On
-`http://<lan-ip>` it does not exist at all, so a wasm-based player silently degrades to
-software decoding on the main thread. For 1080p H.264 that is ~6 fps instead of realtime,
-and the saturated main thread also slows the player's own `fetch` calls — which makes it
-*look* like a network problem.
+Two different questions, and only one of them can be answered by the platform:
+
+| Question | API | Answer |
+|---|---|---|
+| Is this origin allowed to use WebCodecs? | `window.isSecureContext` | scheme only — `https` is always `true`, even with a certificate nobody trusts |
+| Does the browser trust this certificate? | **no API** | must be probed indirectly |
+
+WebCodecs (`VideoDecoder` / `AudioDecoder`) is `[SecureContext]`. On `http://<lan-ip>` it does
+not exist at all, so the wasm player silently degrades to software decoding on the main thread:
+~6 fps instead of realtime for 1080p H.264, and the saturated main thread also slows the
+player's own `fetch` calls — which makes it *look* like a network problem. Before blaming the
+network, check `window.isSecureContext` and `typeof VideoDecoder`, and measure both directions
+(paused fetch throughput vs. frames decoded per second).
+
+### The certificate probe (load-bearing)
+
+A visitor who clicked through the certificate interstitial is on an **unauthenticated**
+connection: anyone on the LAN can impersonate the server. Nothing in JavaScript exposes that,
+but the service worker script fetch does not inherit the click-through exception, so
+registration is a same-origin, causally-correct probe:
+
+```js
+detectCertificateTrust()   // "trusted" | "untrusted" | "insecure" | "unknown"
+```
+
+| Result | Meaning | UI |
+|---|---|---|
+| `untrusted` | registration threw with a certificate/SSL message | show `.movi-hint` → trust page |
+| `trusted` | registration resolved | nothing |
+| `insecure` | `!isSecureContext` (no service worker possible) | nothing |
+| `unknown` | no service worker API, or an unrelated failure (404, CSP, MIME) | nothing |
 
 Rules:
 
-- Before blaming the network, check `window.isSecureContext` and `typeof VideoDecoder`.
-- Measure both directions: raw fetch throughput from the page while paused, versus frames
-  decoded per second while playing. Supply far above the bitrate + low fps = decode-bound.
-- Surface the condition in the UI when it is detectable (`!isSecureContext`), rather than
-  letting the user conclude the player is broken.
-- `http://localhost` **is** secure; `http://192.168.x.x` is not. A self-signed certificate
-  only helps once the client trusts it — an untrusted cert still means an insecure context.
-- **Corollary that surprises people**: `isSecureContext` follows the *scheme*, not the
-  certificate. `https://` with an untrusted certificate is still a secure context, so
-  WebCodecs works and the player's warning correctly does not appear — while the browser
-  still labels the page "Not secure" (that is about authentication, not capabilities).
-  JavaScript cannot detect certificate trust, so no code can bridge the two signals.
-- Do not try to solve this from the page: a web page cannot install a CA, and dufs cannot
-  take a key generated in a browser. The supported path is `scripts/gen-tls.sh` (private CA
-  + server cert) plus the trust page at `assets/trust/index.html`, which is served by the
-  same dufs instance so no file has to be copied between devices. The in-page hint links to
-  it; keep that link working (prefix from the meta tag, never hard-coded).
-- Serving `ca.crt` is safe — it is a public key. Only `tls/ca.key` / `tls/dufs.key` are
-  secrets.
+- **Fail safe to `unknown`, never to `untrusted`.** Match the failure message, do not just check
+  that registration failed — a missing or broken `assets/trust/probe-sw.js` must not accuse a
+  correctly configured visitor.
+- `assets/trust/probe-sw.js` is load-bearing: it must keep being served (dufs serves `.js` as
+  `text/javascript`) and must stay a no-op (no `fetch` handler, no cache) because the code
+  unregisters it right after the answer arrives.
+- Probe on the **player page only**, after the player is mounted; do not block mounting on it.
+- Do not "fix" this by serving plain HTTP as well, by a second port, or by a cross-origin
+  `no-cors` request: `no-cors` resolves opaque whatever happens, and a second listener only adds
+  infrastructure for the same answer.
+- `http://localhost` **is** secure; `http://192.168.x.x` is not. Over plain HTTP the probe cannot
+  run at all (`navigator.serviceWorker` is `undefined`) and no warning is shown — the deployment
+  is TLS-only by design.
+- Do not try to solve this from the page: a page cannot install a CA, and dufs cannot take a key
+  generated in a browser. The supported path is `scripts/gen-tls.sh` (private CA + server cert)
+  plus the trust page at `assets/trust/index.html`, served by the same dufs instance so no file
+  has to be copied between devices. The hint links to it; keep that link working (prefix from
+  the meta tag, never hard-coded).
+- Serving `ca.crt` is safe — it is a public key. Only `tls/ca.key` / `tls/dufs.key` are secrets.
 
 ## 6. Player page layout
 
@@ -182,7 +208,11 @@ Checklist per change:
 - [ ] text page: editor still works, no heavy assets requested
 - [ ] `?view` on a video: plays, seeks
 - [ ] failure path: rename the player JS to force 404 → readable message, download works
-- [ ] `?view` over plain HTTP still shows the hint, and its link resolves to `.../trust/`
+- [ ] `?view` over plain HTTP is silent (no hint, no console errors)
+- [ ] `?view` with an untrusted certificate (private window → click through) shows the hint and
+      its link resolves to `.../trust/index.html`
+- [ ] `?view` with the CA installed shows no hint, and
+      `navigator.serviceWorker.getRegistrations()` is empty afterwards
 - [ ] `git status` touches only the intended files
 
 ### Gotchas that cost time
