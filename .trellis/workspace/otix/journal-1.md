@@ -48,3 +48,20 @@
   silent; tested by renaming the file away on the trusted profile.
 - Rejected: cross-origin probes (`no-cors` always resolves opaque), a second listener, CT logs.
 - Left `movi`'s `mov_text` gap as backlog task 10-28-movi-movtext-subs with the full evidence.
+
+## 2026-10-29 — 10-29-player-seek-controls
+
+- "Does the player support ←/→ seeking and swipe-to-seek?" — yes, all of it is in
+  `movi.js`, gated behind the `fastseek` attribute, and **absent attribute means all three
+  channels off**. That was our state, so arrow keys were dead on the player page.
+- `fastseek="keys gestures"`: `←`/`→` = ±10 s with 1 s chaining, `Ctrl`/`Cmd`+arrow = ±1 frame,
+  horizontal drag across the picture = `dx / width × 90` s with the target time in the OSD,
+  double-tap left/right = ∓10 s. `buttons` left off so the phone control bar keeps its width.
+- Trap worth remembering: `fastseek=""` (empty) means **all three**, not none.
+- Trap worth remembering: keys only fire with focus on the host element; movi self-focuses on
+  `pointerdown` inside, so "click once, then arrows" is the contract. No autofocus on mount.
+- The progress bar's click/drag is a separate `mousedown`/`touchstart` path and never depended
+  on `fastseek` — so touch-drag seeking already worked before this change.
+- Bonus finding while debugging an unrelated report: the same show ships E03 as H.264 and E04
+  as HEVC, which is why one Windows box software-decoded it; and Chrome falls back silently
+  (`videoDecoder.hardwareUnavailable`) — logged in memory, still an open UX gap.
