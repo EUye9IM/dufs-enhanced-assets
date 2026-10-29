@@ -795,6 +795,10 @@ async function mountVideoPlayer(url, $slot) {
   const $player = document.createElement(MOVI_ELEMENT);
   $player.setAttribute("src", url);
   $player.setAttribute("controls", "");
+  // ←/→ seek ∓10s (chaining on repeat) and a horizontal drag on the picture seeks.
+  // Deliberately without "buttons": the ±10s buttons do not fit the control bar on a
+  // phone, and the same seek is reachable by keyboard, swipe and double-tap.
+  $player.setAttribute("fastseek", "keys gestures");
   $player.className = "movi-player";
   $player.addEventListener("error", () => {
     $slot.classList.remove("hidden");

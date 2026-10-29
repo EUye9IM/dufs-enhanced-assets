@@ -23,6 +23,7 @@ Re-apply these when syncing to a newer dufs. Everything else must stay byte-iden
 | `assets/index.js` | `ICONS.play` entry |
 | `assets/index.js` | `addPath()`: `isVideo` / `actionPlay`, `actionView` gains `&& !isVideo`, `actionPlay` rendered before `actionDownload` |
 | `assets/index.js` | `loadMovi()` + `mountVideoPlayer()` (new functions, before `setupEditorPage`); `assetsPrefix()`; `detectCertificateTrust()` + `TRUST_PROBE`, which mounts a hint linking to the trust page when the certificate is untrusted |
+| `assets/index.js` | `mountVideoPlayer()` sets `fastseek="keys gestures"` (arrow keys + swipe seek; no ±10s buttons) |
 | `assets/index.js` | `setupEditorPage()`: video branch inside `if (!DATA.editable)` |
 | `assets/index.css` | `body.has-movi-player`, `body.has-movi-player .editor-page`, `.movi-player`, `.movi-player:not(:defined)`, `.movi-hint`, `.movi-hint a` |
 

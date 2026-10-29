@@ -173,7 +173,41 @@ Notes:
   `innerHeight` (±1 px) for a one-row header, a two-row header (deep path) and a three-row
   header (narrow window), and `document.body.scrollHeight` must equal `innerHeight`.
 
-## 7. Third-party loading
+## 7. Seeking: the `fastseek` channels
+
+`movi.js` implements three independent seek channels behind one attribute. **When the attribute
+is absent all three are off** — that was the state of this project until the arrow keys were
+reported as dead. `mountVideoPlayer()` therefore sets them explicitly:
+
+```js
+$player.setAttribute("fastseek", "keys gestures");
+```
+
+| Channel | Ours | Behaviour inside `movi.js` |
+|---|---|---|
+| `keys` | **on** | `←`/`→` = `performRelativeSeek()` ±10 s, chained within 1 s (10 → 20 → 30 …); `Ctrl`/`Cmd` + `←`/`→` = ±1 frame |
+| `gestures` | **on** | horizontal drag on the picture = `dx / width × 90` s, continuous, OSD `mm:ss / mm:ss`; double-tap left 30 % / right 30 % = ∓10 s; double-tap centre = fullscreen |
+| `buttons` | **off** | would add ±10 s buttons to the control bar — the bar is already full width on a phone, and the same seek is reachable three other ways |
+
+Traps, all measured:
+
+- **`fastseek=""` means all three.** An empty value is not "nothing"; spell the channels out.
+- **The keys need focus.** The listener is on the host element, and movi focuses itself on any
+  `pointerdown` inside it. Pressing `→` on a freshly loaded page (`activeElement === BODY`)
+  does nothing — `30 → 30`. After clicking the picture, the play button or the progress bar,
+  three presses measured `100.27 → 110.73 → 120.71 → 130.47`. We deliberately do **not**
+  autofocus on mount (a script-triggered focus can raise a focus ring); one click inside the
+  player is the expected first interaction.
+- **The progress bar does not depend on `fastseek`.** It has its own `mousedown`/`touchstart` +
+  document `mousemove`/`touchmove` path, so touch-drag seeking works even with all channels off
+  (measured 25 % → 60 % of a 300 s file = 180.0 s). If the bar ever stops working, look there,
+  not here.
+- **Never patch `movi.js` for this.** It is byte-identical to upstream (§10); the attribute is
+  the supported knob.
+- Keys are ignored while an `INPUT`/`TEXTAREA`/`SELECT` has focus (guarded upstream): with an
+  injected `<input>` focused, `→` left `currentTime` at 180.0.
+
+## 8. Third-party loading
 
 - Load heavy third-party assets **lazily**, only on the page that needs them. The
   directory page must stay byte-identical to upstream.
@@ -186,7 +220,7 @@ Notes:
   `<script>` must be a real `src` script and `fetch()` must not see credentials in that
   URL.
 
-## 8. Verification recipe
+## 9. Verification recipe
 
 There is no test suite. Verification is manual, against a real dufs binary.
 
@@ -207,6 +241,9 @@ Checklist per change:
 - [ ] directory page: correct actions per file type, no duplicate icons
 - [ ] text page: editor still works, no heavy assets requested
 - [ ] `?view` on a video: plays, seeks
+- [ ] `?view` on a video: `fastseekModes === "keys gestures"`, three `→` presses add ≈10 s
+      each, a horizontal touch drag on the picture seeks, and the control bar has no ±10 s
+      buttons (`getComputedStyle` → `display: none`)
 - [ ] failure path: rename the player JS to force 404 → readable message, download works
 - [ ] `?view` over plain HTTP is silent (no hint, no console errors)
 - [ ] `?view` with an untrusted certificate (private window → click through) shows the hint and
@@ -225,7 +262,7 @@ Checklist per change:
 | Credentials in the URL break the player | `fetch()` cannot construct a request from a URL containing credentials, and movi derives its wasm URL from `document.currentScript.src`. Use the browser's auth cache. |
 | Shared browser sessions | When automating, use a dedicated session name so parallel work does not hijack the page. |
 
-## 9. Upstream bookkeeping
+## 10. Upstream bookkeeping
 
 `UPSTREAM.md` records the dufs and movi-player versions, the exact local diff against
 upstream `assets/`, and the sha256 of both movi files. Any change to either upstream must

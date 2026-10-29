@@ -60,6 +60,26 @@ Any failure keeps the file downloadable and the page usable:
 | `movi.js` 404 / network error | "Failed to load video player. You can still download the file." |
 | `movi.wasm` fetch or instantiation error, unsupported codec | "This video could not be decoded. You can still download the file." |
 
+### Seeking
+
+`movi.js` exposes three seek channels behind the `fastseek` attribute, and **all of them are off
+when the attribute is absent**. The player page sets `fastseek="keys gestures"`:
+
+| Input | Result |
+|---|---|
+| `←` / `→` (keyboard) | ±10 s, and holding/repressing keeps adding up (10 → 20 → 30 s) |
+| `Ctrl` / `Cmd` + `←` / `→` | ±1 frame |
+| Horizontal drag across the picture (touch) | continuous seek, up to ±90 s across the full width, with the target time on screen |
+| Double-tap left / right of the picture (touch) | ∓10 s |
+| Drag or click the progress bar | seeks (works with or without `fastseek`) |
+
+The ±10 s control-bar buttons are deliberately **not** enabled: the bar is already full width on
+a phone and the same seek is reachable by keyboard, swipe and double-tap. To get them anyway,
+change the attribute to `fastseek=""` (empty = all three channels).
+
+Arrow keys need the player to have focus, which a click anywhere inside the player grants. On a
+freshly loaded page with nothing clicked yet, they do nothing.
+
 ## Browser support
 
 Playback needs WebCodecs and WebAssembly. Latest Chrome / Edge / Safari (16.4+) are
