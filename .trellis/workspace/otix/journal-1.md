@@ -86,3 +86,20 @@
   with `fastseekModes = "keys gestures"`, directory and text pages unaffected.
 - Side note for the next deploy: the NAS bundle must now include `assets/index.html`, or the
   versioned URLs never ship.
+
+## 2026-11-03 — 11-03-visited-play-links
+
+- Chose `:visited` over localStorage/IndexedDB/server state on the user's call: the question is
+  "did I open this", not "how far did I get", and the answer is already in the browser.
+- Three Chrome restrictions decided the implementation: only colour-type properties change on
+  `:visited`; descendants never receive visited styles (so `a:visited svg { fill }` is dead); and
+  `getComputedStyle` is masked, so **JS cannot tell visited from unvisited**.
+- Consequence: the icon's colour has to arrive by inheritance (`fill: currentColor` on the svg) and
+  the anchor needs an explicit base colour, otherwise the binding falls back to UA link blue and
+  unvisited rows change appearance. Caught because the fill probe read `rgb(0,0,238)`.
+- `--text-tertiary` beats `--text-secondary`: light `#24292e`→`#586069`, dark `#fff`→`#586069`.
+  `--text-secondary` is `#ddd` in the dark theme and barely reads on black.
+- Verification trap worth remembering: `Page.navigate` to a URL and back does **not** mark the link
+  visited; a dispatched mouse click does. And since JS can't read the state, the check is
+  screenshot-clip hashing — the visited row's clip must change, every other row must stay
+  byte-identical. That also caught the blue-icon regression.
