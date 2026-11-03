@@ -33,3 +33,7 @@ code.
 
 Do not version `index.html`, `movi.js`, `movi.wasm`, `favicon.ico` or `trust/*`: they change only
 when syncing upstream, and their long cache is the point.
+
+dufs reads `index.html` **once, at startup** (`index.css` / `index.js` are per-request), so a bump
+only takes effect after `systemctl restart dufs` on the deploy target. A CSS/JS-only change needs
+no restart.

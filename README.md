@@ -53,6 +53,11 @@ by dufs but is part of the URL, so the browser treats it as a new resource. `ind
 served `no-cache`, which is what makes this work: it is always fresh, and it points at a new URL.
 
 Each file has its own version, so touching only `index.js` leaves a cached `index.css` alone.
+
+**dufs reads `index.html` once, at startup** — `index.css` / `index.js` it reads per request. So
+deploying a bumped `index.html` needs `systemctl restart dufs`; a CSS/JS-only change does not. If
+the served page still shows `index.css` without a `?v=`, the restart is what is missing.
+
 `movi.js` / `movi.wasm` / `favicon.ico` / `trust/*` stay unversioned on purpose — they change only
 when syncing upstream, and their long cache saves ~10 MB per visitor.
 

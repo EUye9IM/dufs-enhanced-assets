@@ -64,6 +64,20 @@ URL. Two tags in it carry a per-file version:
 `./bump-assets.sh` rewrites both from `date -r <file> +%s` (portable GNU/BSD, no `sed -i`) and is
 idempotent.
 
+**`index.html` is read once, at startup.** dufs keeps the rendered template in memory; `index.css`
+and `index.js` are read per request. Measured with a running instance:
+
+| File edited while dufs runs | Served after the edit, no restart |
+|---|---|
+| `assets/index.html` | **no** (still the copy loaded at startup) |
+| `assets/index.css` | yes |
+| `assets/index.js` | yes |
+
+So a change to `index.html` — including a `bump-assets.sh` run — needs `systemctl restart dufs`
+on the deploy target, while a CSS/JS-only change does not. Symptom of forgetting: the served HTML
+still shows `index.css` with no `?v=`, so browsers keep their long-cached URL and the deploy looks
+like it did nothing.
+
 Rules:
 
 - **Run `./bump-assets.sh` after editing `assets/index.css` or `assets/index.js`, before
@@ -141,9 +155,18 @@ Without the first rule the icon falls back to the UA link colour (blue), because
 `svg { fill: var(--svg-primary) }` is overridden once the fill becomes `currentColor`. This was
 the first version of this change and it was measurably wrong.
 
-`--text-tertiary` rather than `--text-secondary`: it is the one token that reads as "dimmer" in
-both schemes (light `#24292e` → `#586069`, dark `#fff` → `#586069`), whereas `--text-secondary`
-resolves to `#ddd` in the dark theme and nearly disappears on black.
+Final values: icon `#a0a4a8` / dark `#6b6b6b`, plus a soft chip behind the watched icon
+(`background-color: #e3e8ee` / `#333`, with the padding and radius in the base rule so the row
+never moves). Theme tokens cannot express this: `--text-secondary` is `#ddd` in the dark scheme,
+which nearly vanishes on black, and `--text-tertiary` (`#586069`) is too close to `#24292e` in the
+light scheme to read on a 16px icon. A first attempt with `--text-tertiary` was rejected by the
+user as "too weak", which is the measurement that matters here.
+
+**The filename cannot dim when a video is watched**, and that is a browser rule, not a choice:
+the name link points at `/x.mp4` while the player lives at `/x.mp4?view`, and `:visited` matches
+the exact URL. Only the play/view action — the one whose href has `?view` — can carry the mark.
+Making the name reflect it would require changing the name link's destination (a behaviour change)
+or JS + localStorage (a storage decision), not more CSS.
 
 Verifying this needs a real navigation *and* a pixel comparison, because JS cannot read the state:
 
@@ -307,7 +330,8 @@ ffmpeg -f lavfi -i testsrc2=size=640x360:rate=25 -t 5 -c:v mpeg4 mpeg4.avi
 Checklist per change:
 
 - [ ] `curl -sk -A "<browser UA>" https://host:port/ | grep -o 'index\.\(css\|js\)?v=[0-9]*'`
-      → both present, with different numbers (they must match `date -r` of the two files)
+      → both present, with different numbers (they must match `date -r` of the two files).
+      If they are missing, `index.html` was edited but dufs was not restarted (see §2.1)
 - [ ] directory page: correct actions per file type, no duplicate icons
 - [ ] text page: editor still works, no heavy assets requested
 - [ ] `?view` on a video: plays, seeks
