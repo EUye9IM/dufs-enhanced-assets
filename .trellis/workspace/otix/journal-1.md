@@ -65,3 +65,24 @@
 - Bonus finding while debugging an unrelated report: the same show ships E03 as H.264 and E04
   as HEVC, which is why one Windows box software-decoded it; and Chrome falls back silently
   (`videoDecoder.hardwareUnavailable`) — logged in memory, still an open UX gap.
+
+## 2026-11-03 — 11-03-asset-cache-busting
+
+- The stale-cache bug was still unfixed (deferred twice). dufs sends `immutable` + one-year
+  max-age for `--assets`, ignores query strings, and has no header switch; so a deployed
+  `index.js` never arrived for a returning browser, silently.
+- Fix uses the one header we control: `index.html` is `no-cache`, so it now carries
+  `index.css?v=<mtime>` / `index.js?v=<mtime>`. Per-file, because they change independently.
+- `bump-assets.sh` is 20 lines of POSIX sh; `date -r` instead of `stat` (GNU/BSD identical), temp
+  file + `mv` instead of `sed -i` (which differs between userlands). Verified idempotent and that
+  touching one file bumps only that file's version.
+- Chose mtime over a content hash on the user's ask ("简单点"); noted `sha256sum | cut -c1-8` as a
+  drop-in if false invalidations ever cost anything. `tar` preserves mtimes, so a normal deploy
+  does not cause one.
+- The "run it before committing" rule went into `AGENTS.md` **after** `<!-- TRELLIS:END -->`,
+  because a `trellis update` may overwrite the managed block.
+- Verified live: served `index.html` carries both versions, the player page's resource list shows
+  `index.css?v=…` / `index.js?v=…` and unversioned `movi.js` / `movi.wasm`, player still mounts
+  with `fastseekModes = "keys gestures"`, directory and text pages unaffected.
+- Side note for the next deploy: the NAS bundle must now include `assets/index.html`, or the
+  versioned URLs never ship.
