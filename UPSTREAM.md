@@ -19,6 +19,7 @@ Re-apply these when syncing to a newer dufs. Everything else must stay byte-iden
 | File | Change |
 |---|---|
 | `assets/index.html` | `+ <meta name="dufs-assets-prefix" content="__ASSETS_PREFIX__">` in `<head>` |
+| `assets/index.html` | `?v=<mtime>` query on the `index.css` / `index.js` tags — rewritten by `bump-assets.sh`, never hand-edited |
 | `assets/index.js` | `MEDIA_VIDEO_FORMATS`, `MOVI_SCRIPT`, `MOVI_ELEMENT` constants |
 | `assets/index.js` | `ICONS.play` entry |
 | `assets/index.js` | `addPath()`: `isVideo` / `actionPlay`, `actionView` gains `&& !isVideo`, `actionPlay` rendered before `actionDownload` |

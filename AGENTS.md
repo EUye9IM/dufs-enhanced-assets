@@ -19,3 +19,17 @@ If you're using Codex or another agent-capable tool, additional project-scoped h
 Managed by Trellis. Edits outside this block are preserved; edits inside may be overwritten by a future `trellis update`.
 
 <!-- TRELLIS:END -->
+
+## Asset cache busting (must read before editing `assets/`)
+
+dufs serves everything under `--assets` with `Cache-Control: public, max-age=31536000, immutable`
+and ignores query strings, so a deployed `index.css` / `index.js` keeps running from cache until
+its URL changes. `assets/index.html` is `no-cache`, which is why it carries the version query.
+
+**After editing `assets/index.css` or `assets/index.js`, run `./bump-assets.sh` before committing.**
+It bakes each file's mtime into `assets/index.html` as `?v=<mtime>`. Forgetting it means the change
+silently does nothing in every browser that has visited before — no error, no hint, just the old
+code.
+
+Do not version `index.html`, `movi.js`, `movi.wasm`, `favicon.ico` or `trust/*`: they change only
+when syncing upstream, and their long cache is the point.

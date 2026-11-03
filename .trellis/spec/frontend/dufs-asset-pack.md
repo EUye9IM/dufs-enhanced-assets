@@ -44,8 +44,40 @@ const prefix = $meta ? $meta.content : "";
 script.src = prefix + "movi.js";
 ```
 
-The prefix is worth relying on for caching: it carries `Cache-Control: immutable` with a
-one-year max-age, and a dufs upgrade changes the prefix, which invalidates it for free.
+The prefix carries `Cache-Control: immutable` with a one-year max-age, and a dufs upgrade changes
+the prefix, which invalidates it for free. **A change of ours does not** — see §2.1.
+
+### 2.1 Cache busting for our own files
+
+dufs sends `public, max-age=31536000, immutable` for every file under `--assets`, ignores query
+strings, and exposes no header/cache switch. So a deployed `index.js` change is invisible to any
+browser that has already loaded it, for up to a year, with no error message.
+
+The lever is `index.html`: dufs serves it `no-cache`, so it is always fresh and can point at a new
+URL. Two tags in it carry a per-file version:
+
+```html
+<link rel="stylesheet" href="__ASSETS_PREFIX__index.css?v=<mtime>">
+<script src="__ASSETS_PREFIX__index.js?v=<mtime>"></script>
+```
+
+`./bump-assets.sh` rewrites both from `date -r <file> +%s` (portable GNU/BSD, no `sed -i`) and is
+idempotent.
+
+Rules:
+
+- **Run `./bump-assets.sh` after editing `assets/index.css` or `assets/index.js`, before
+  committing.** This is also written into `AGENTS.md` because forgetting it silently reproduces
+  the stale-cache bug — the change simply never arrives.
+- **One version per file.** Editing `index.js` must not invalidate a cached `index.css`.
+- **Never version `index.html` itself** (it is `no-cache`; a query there would only defeat the
+  mechanism) and **never version `movi.js` / `movi.wasm` / `favicon.ico` / `trust/*`** — they
+  change only on an upstream sync, and their long cache saves ~10 MB per visitor.
+- **Keep using `__ASSETS_PREFIX__`** in those tags; a hard-coded prefix is still the #1 source of
+  404s.
+- mtime is not a content hash: `touch` or re-extracting an archive bumps the version with no
+  content change, costing one unnecessary download. `sha256sum | cut -c1-8` is a drop-in
+  replacement if that ever matters.
 
 ## 3. Page states and the data contract
 
@@ -238,6 +270,8 @@ ffmpeg -f lavfi -i testsrc2=size=640x360:rate=25 -t 5 -c:v mpeg4 mpeg4.avi
 
 Checklist per change:
 
+- [ ] `curl -sk -A "<browser UA>" https://host:port/ | grep -o 'index\.\(css\|js\)?v=[0-9]*'`
+      → both present, with different numbers (they must match `date -r` of the two files)
 - [ ] directory page: correct actions per file type, no duplicate icons
 - [ ] text page: editor still works, no heavy assets requested
 - [ ] `?view` on a video: plays, seeks
