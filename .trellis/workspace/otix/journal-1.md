@@ -103,3 +103,21 @@
   visited; a dispatched mouse click does. And since JS can't read the state, the check is
   screenshot-clip hashing — the visited row's clip must change, every other row must stay
   byte-identical. That also caught the blue-icon regression.
+
+## 2026-11-03 — 11-03-visited-marker-strength
+
+- First live check of the `:visited` marker came back "效果不强", and a `curl` of the NAS showed
+  `index.html` served with **no** `?v=`, even though the file on disk had one and css/js on disk
+  were current. Root cause found by experiment on a throwaway dufs instance: **`index.html` is
+  read once at startup**, `index.css` / `index.js` per request. Editing the template therefore
+  needs `systemctl restart dufs`; the deploy script previously claimed no restart was needed —
+  wrong, and it is the exact reason the bump looked like it did nothing.
+- Strengthened the marker on the user's feedback: icon `#a0a4a8` (light) / `#6b6b6b` (dark) plus a
+  soft chip behind watched play icons. Neither theme token works: `--text-secondary` is `#ddd` in
+  the dark scheme, `--text-tertiary` is too close to `#24292e` in the light one. Padding/radius in
+  the base rule so the chip cannot shift the row.
+- Structural limit now written down instead of rediscovered: the **filename** cannot dim from
+  watching, because the name link is `/x.mp4` and the player is `/x.mp4?view` — `:visited` matches
+  exact URLs.
+- Deploy script now runs `systemctl restart dufs` and prints the verification `curl` (with a
+  browser UA, since dufs sniffs it).
