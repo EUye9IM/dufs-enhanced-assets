@@ -117,6 +117,42 @@ whitelist is fine for choosing UI**, and is **not** acceptable as a decoder deci
 Extensions do not describe codecs (`.mp4` can be HEVC, `.mkv` can be H.264), and a wrong
 guess reproduces the black-frame bug this project exists to fix.
 
+### 4.1 Visited-link styling (`:visited`)
+
+The play / view actions are `<a href="...?view">` links, so the browser's own history marks them
+once opened. `index.css` dims them with `color: var(--text-tertiary)` — no storage, no JS, and it
+survives a reload. Chrome's privacy rules make this narrower than it looks:
+
+| Constraint | Consequence |
+|---|---|
+| Only colour-type properties may change on `:visited` (`color`, `background-color`, `border-*-color`, `outline-color`, `fill`, `stroke`) | no `opacity`, no `content`, no `background-image` — you cannot add a ✓ badge |
+| Descendants and pseudo-elements do not get visited styles | `a:visited svg { fill: … }` does nothing |
+| `getComputedStyle()` reports the unvisited value | **the state cannot be read from JS at all** |
+
+Because of the second row the icon's colour must reach the SVG through inheritance instead:
+
+```css
+.cell-actions a[href$="?view"] { color: var(--svg-primary) }        /* base: the old icon colour */
+.cell-actions a[href$="?view"] svg { fill: currentColor }           /* inherit the anchor's colour */
+.cell-actions a[href$="?view"]:visited { color: var(--text-tertiary) }
+```
+
+Without the first rule the icon falls back to the UA link colour (blue), because
+`svg { fill: var(--svg-primary) }` is overridden once the fill becomes `currentColor`. This was
+the first version of this change and it was measurably wrong.
+
+`--text-tertiary` rather than `--text-secondary`: it is the one token that reads as "dimmer" in
+both schemes (light `#24292e` → `#586069`, dark `#fff` → `#586069`), whereas `--text-secondary`
+resolves to `#ddd` in the dark theme and nearly disappears on black.
+
+Verifying this needs a real navigation *and* a pixel comparison, because JS cannot read the state:
+
+- `Page.navigate` to the target URL and back does **not** mark the link visited; a dispatched
+  mouse click (`Input.dispatchMouseEvent` pressed/released on the link) does.
+- Compare `Page.captureScreenshot` **clips** of the two rows before/after and hash the PNG bytes:
+  the visited row must change, every other row must stay byte-identical. Reading a colour with
+  `getComputedStyle` will always show the unvisited value and proves nothing.
+
 ## 5. Secure context vs. certificate trust
 
 Two different questions, and only one of them can be answered by the platform:

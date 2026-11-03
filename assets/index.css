@@ -236,6 +236,29 @@ svg {
   cursor: pointer;
 }
 
+/* Visited links. The play / view actions are icon-only, so the icon itself has to dim —
+   but Chrome only honours colour-type properties on :visited (color, background-color,
+   border-*-color, outline-color, fill, stroke) and refuses to style descendants, so the
+   icon's fill is bound to the anchor's own colour. One visited `color` then reaches both
+   the icon and the label. */
+/* Base colour so an unvisited icon keeps the look the global `svg { fill }` rule gave it;
+   without this, binding the fill to currentColor would fall back to link blue. */
+.cell-actions a[href$="?view"] {
+  color: var(--svg-primary);
+}
+
+.cell-actions a[href$="?view"] svg {
+  fill: currentColor;
+}
+
+.cell-actions a[href$="?view"]:visited {
+  color: var(--text-tertiary);
+}
+
+.path a:visited {
+  color: var(--text-tertiary);
+}
+
 .uploaders-table {
   padding: 0.5em 0;
 }
