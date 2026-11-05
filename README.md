@@ -74,6 +74,8 @@ unnecessary download. If that ever matters, `sha256sum | cut -c1-8` is a drop-in
 | Every page, header | A 🔒 **Trust** link in the top bar opens `assets/trust/index.html` — the certificate install instructions — on every page, whether or not the certificate is trusted. |
 | File list, already-opened rows | The ▶ play icon (and any visited filename link) is dimmed by the browser's own `:visited` styling, so you can see which videos you have opened. Nothing is stored: it lives in your browser history, per device, and survives a reload. |
 | `?view` / `?edit` page, video extension | Loads `movi.js` on demand and mounts `<movi-player src="<file-url>">`, replacing the iframe / "Cannot edit" placeholder. |
+| File list, audio rows | Same ▶ action, titled **Play audio**. Audio files play in the same player in its audio-strip layout (cover art, cover-art level meter, speed and loop), centred at a capped width. |
+| `?view`, audio extension | Mounts the player with `audioonly`. Accepted extensions: `.mp3 .flac .m4a .m4b .aac .ogg .oga .opus .wav .wma .mka` — each one measured against the bundled build; `.aiff` is **not** accepted by movi and keeps the plain file page. |
 | Directory page, text pages | **Zero** extra bytes: `movi.js` (4.8 MB) and `movi.wasm` (5.4 MB) are only fetched on a video view page. |
 
 Decoding is always delegated to movi-player; this project does not try to guess whether

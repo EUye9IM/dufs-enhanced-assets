@@ -131,6 +131,54 @@ whitelist is fine for choosing UI**, and is **not** acceptable as a decoder deci
 Extensions do not describe codecs (`.mp4` can be HEVC, `.mkv` can be H.264), and a wrong
 guess reproduces the black-frame bug this project exists to fix.
 
+### 4.2 Audio files
+
+`MEDIA_AUDIO_FORMATS` (`assets/index.js`) decides which rows get the ▶ action titled "Play audio"
+and which `?view` pages mount the player with `audioonly`. That attribute matters: without it movi
+reserves a video surface and the page shows an empty frame instead of its audio strip.
+
+**The list is measured, not assumed.** Each entry was loaded through the bundled
+`movi.js` + `movi.wasm` against a real file:
+
+| Extension | Result | Codec reported |
+|---|---|---|
+| `.mp3` | ok, 8 s | `mp3` |
+| `.flac`, `.fla` | ok, 8 s | `flac` |
+| `.m4a`, `.m4b` | ok, 8 s | `aac` |
+| `.aac` (ADTS) | ok, 8.69 s (ADTS duration is estimated) | `aac` |
+| `.ogg`, `.oga` (opus) | ok, 8.01 s | `opus` |
+| `.ogg` (vorbis) | ok, 8 s | `vorbis` |
+| `.opus` | ok, 8.01 s | `opus` |
+| `.wav` | ok, 8 s | `pcm_s16le` |
+| `.wma` | ok, 8.03 s | `wmav2` |
+| `.mka` | ok, 8 s | `flac` |
+| `.aiff` | **`Failed to open media: File is corrupted or in an unsupported format`** | — |
+
+So the container's reputation is not the criterion — movi's wasm ffmpeg demuxers are. `.wma`
+works, `.aiff` does not. Re-measure before adding an extension; a wrong entry means a ▶ button
+that leads to an error page.
+
+Audio extensions must **not** also sit in `IFRAME_FORMATS`: the media branch runs first, so the
+iframe entry becomes dead code (that is why `.mp3 .ogg .wav .m4a` were removed from it).
+
+Layout: movi sets its own height (≈56 px) and adds `movi-audio-strip` in audio mode, so the §6
+flex chain cannot stretch it — the strip would sit at the top of a full-height empty page. The one
+audio-specific rule centres it and caps the width:
+
+```css
+body.has-movi-player .editor-page>.movi-player.movi-audio-strip {
+  align-self: center;
+  width: min(100%, 48em);
+  margin-top: auto;
+  margin-bottom: auto;
+}
+```
+
+Note that at narrow widths the strip inherits the same pre-existing horizontal overflow as video
+(dufs' 246 px search field makes the header ~538 px wide at a 390 px viewport), so `min(100%, …)`
+resolves against a 506 px content box. That is upstream behaviour, visible on video pages too —
+not something this rule introduces.
+
 ### 4.1 Visited-link styling (`:visited`)
 
 The play / view actions are `<a href="...?view">` links, so the browser's own history marks them

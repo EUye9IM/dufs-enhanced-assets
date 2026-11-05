@@ -47,15 +47,24 @@ const IFRAME_FORMATS = [
   ".pdf",
   ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".svg",
   ".mp4", ".mov", ".avi", ".wmv", ".flv", ".webm",
-  ".mp3", ".ogg", ".wav", ".m4a",
 ];
 
-// Video formats that may require movi-player (ffmpeg-wasm) to decode.
-// Only used to decide whether the Play action is shown; it never selects a decoder.
+// Formats that may require movi-player (ffmpeg-wasm) to decode. Only used to decide whether the
+// Play action is shown and whether ?view mounts the player; it never selects a decoder — the
+// player probes the bytes. Every extension below was measured to load in the bundled build, so
+// the lists describe what the player accepts, not what a container "should" contain: .aiff is
+// not listed because movi rejects it, while .wma and .mka work.
 const MEDIA_VIDEO_FORMATS = [
   ".mp4", ".m4v", ".mov", ".mkv", ".webm", ".avi", ".wmv", ".flv",
   ".ts", ".m2ts", ".mpg", ".mpeg", ".rmvb", ".rm", ".3gp", ".ogv",
 ];
+
+const MEDIA_AUDIO_FORMATS = [
+  ".mp3", ".flac", ".m4a", ".m4b", ".aac", ".ogg", ".oga", ".opus",
+  ".wav", ".wma", ".mka",
+];
+
+const MEDIA_FORMATS = [...MEDIA_VIDEO_FORMATS, ...MEDIA_AUDIO_FORMATS];
 
 const MOVI_SCRIPT = "movi.js";
 const MOVI_ELEMENT = "movi-player";
@@ -543,9 +552,12 @@ function addPath(file, index) {
   let actionEdit = "";
   let actionView = "";
   let isDir = file.path_type.endsWith("Dir");
-  const isVideo = !isDir && MEDIA_VIDEO_FORMATS.includes(extName(file.name).toLowerCase());
-  const actionPlay = isVideo
-    ? `<a class="action-btn" title="Play video" target="_blank" href="${url}?view">${ICONS.play}</a>`
+  const ext = extName(file.name).toLowerCase();
+  const isVideo = !isDir && MEDIA_VIDEO_FORMATS.includes(ext);
+  const isAudio = !isDir && MEDIA_AUDIO_FORMATS.includes(ext);
+  const isPlayable = isVideo || isAudio;
+  const actionPlay = isPlayable
+    ? `<a class="action-btn" title="${isAudio ? "Play audio" : "Play video"}" target="_blank" href="${url}?view">${ICONS.play}</a>`
     : "";
   if (isDir) {
     url += "/";
@@ -571,7 +583,7 @@ function addPath(file, index) {
     actionDelete = `
     <div onclick="deletePath(${index})" class="action-btn" id="deleteBtn${index}" title="Delete">${ICONS.delete}</div>`;
   }
-  if (!actionEdit && !isDir && !isVideo) {
+  if (!actionEdit && !isDir && !isPlayable) {
     actionView = `<a class="action-btn" title="View file" target="_blank" href="${url}?view">${ICONS.view}</a>`;
   }
   let actionCell = `
@@ -795,6 +807,11 @@ async function mountVideoPlayer(url, $slot) {
   const $player = document.createElement(MOVI_ELEMENT);
   $player.setAttribute("src", url);
   $player.setAttribute("controls", "");
+  // An audio file has no picture: without this the player still reserves a video surface and
+  // shows an empty frame instead of its cover-art / level-meter layout.
+  if (MEDIA_AUDIO_FORMATS.includes(extName(baseName(url)).toLowerCase())) {
+    $player.setAttribute("audioonly", "");
+  }
   // ←/→ seek ∓10s (chaining on repeat) and a horizontal drag on the picture seeks.
   // Deliberately without "buttons": the ±10s buttons do not fit the control bar on a
   // phone, and the same seek is reachable by keyboard, swipe and double-tap.
@@ -802,7 +819,7 @@ async function mountVideoPlayer(url, $slot) {
   $player.className = "movi-player";
   $player.addEventListener("error", () => {
     $slot.classList.remove("hidden");
-    $slot.textContent = "This video could not be decoded. You can still download the file.";
+    $slot.textContent = "This file could not be decoded. You can still download the file.";
   }, { once: true });
   $slot.insertAdjacentElement("afterend", $player);
   $slot.classList.add("hidden");
@@ -866,7 +883,7 @@ async function setupEditorPage() {
     const $notEditable = document.querySelector(".not-editable");
     const url = baseUrl();
     const ext = extName(baseName(url));
-    if (MEDIA_VIDEO_FORMATS.includes(ext.toLowerCase())) {
+    if (MEDIA_FORMATS.includes(ext.toLowerCase())) {
       await mountVideoPlayer(url, $notEditable);
       return;
     }

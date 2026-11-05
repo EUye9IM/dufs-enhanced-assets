@@ -407,6 +407,17 @@ body.has-movi-player .editor-page>.movi-player {
   height: auto;
 }
 
+/* Audio files: movi renders a ~56px strip and sets its own height on the host, so the flex chain
+   above cannot stretch it — it would sit at the top of an otherwise full-height, empty page.
+   Centre it and cap the width. Scoped to the class movi adds in audio mode, so the video layout
+   above is untouched. */
+body.has-movi-player .editor-page>.movi-player.movi-audio-strip {
+  align-self: center;
+  width: min(100%, 48em);
+  margin-top: auto;
+  margin-bottom: auto;
+}
+
 .movi-player {
   display: block;
   width: 100%;
