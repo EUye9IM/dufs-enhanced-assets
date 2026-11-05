@@ -139,3 +139,23 @@
 - Also checked: the player layout contract still holds with the extra header child (head 49,
   player bottom == innerHeight, overflow 0), and `trust/` still 500s while `trust/index.html`
   returns 200.
+
+## 2026-11-06 — 11-06-audio-playback
+
+- Audio had no route into the player: `.mp3/.ogg/.wav/.m4a` used the native iframe, everything
+  else landed on "Cannot edit because file is too large or binary". movi itself is audio-capable
+  (`audioonly`, audio strip, cover art meter), so the fix is routing, not decoding.
+- Wrote the list from measurements against the bundled `movi.js` + `movi.wasm`, not from what
+  containers "should" support. Nine of eleven load cleanly; `.aiff` is rejected outright. The
+  surprise pair: **`.wma` decodes** (`wmav2`) and **`.aiff` does not** — the wasm ffmpeg demuxers
+  decide, not the format's reputation. That is now a spec rule with the full matrix.
+- `audioonly` is required: without it movi reserves a video surface and the page renders an empty
+  frame. movi then pins its own ~56 px height, which the §6 flex chain cannot stretch, so the
+  strip sat at the top of a full-height empty page. One audio-scoped rule centres it and caps the
+  width; the video path still measures bottom == innerHeight with no `audioonly` and unchanged
+  `fastseekModes`.
+- Dropped the audio extensions from `IFRAME_FORMATS` rather than leaving dead entries behind: the
+  media branch runs first, so they could never be reached.
+- Side finding while measuring at 390 px: the audio strip inherits dufs' pre-existing horizontal
+  overflow (246 px search field → 506 px content box at a 390 px viewport). Video pages do the
+  same, so it is documented as upstream behaviour instead of being "fixed" here.
