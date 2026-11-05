@@ -192,6 +192,22 @@ player's own `fetch` calls — which makes it *look* like a network problem. Bef
 network, check `window.isSecureContext` and `typeof VideoDecoder`, and measure both directions
 (paused fetch throughput vs. frames decoded per second).
 
+### Reaching the trust page
+
+`assets/trust/index.html` is linked from the header of **every** page: an `<a class="trust-link">`
+appended to `.toolbox` in `index.html` (icon + "Trust" label, label hidden under 600 px). It is
+unconditional — the hint on the player page only appears when the certificate is *untrusted*, so
+without this link a visitor who dismissed the hint once has no way back to the instructions.
+
+Two rules:
+
+- Link `trust/index.html`, never `trust/`. dufs' assets handler resolves files only; a
+  trailing-slash directory URL returns `500 Is a directory (os error 21)` (§9).
+- It lives in `.toolbox`, not `.toolbox-right`. Measured at 390 px wide: `.toolbox-right` lands at
+  x≈474 — past the right edge, unreachable on a phone — while `.toolbox` keeps the link at
+  x≈44–318 inside the viewport. The header's own overflow at that width is pre-existing (the
+  246 px search field), so do not "fix" it here.
+
 ### The certificate probe (load-bearing)
 
 A visitor who clicked through the certificate interstitial is on an **unauthenticated**

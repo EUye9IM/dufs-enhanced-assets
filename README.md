@@ -71,6 +71,7 @@ unnecessary download. If that ever matters, `sha256sum | cut -c1-8` is a drop-in
 |---|---|
 | File list, video rows | A **▶ Play video** action opens `<file>?view` in a new tab. Shown regardless of `--allow-upload` / `--allow-delete`. |
 | File list, non-video rows | Unchanged. The plain filename link keeps working as a direct/native/download escape hatch. |
+| Every page, header | A 🔒 **Trust** link in the top bar opens `assets/trust/index.html` — the certificate install instructions — on every page, whether or not the certificate is trusted. |
 | File list, already-opened rows | The ▶ play icon (and any visited filename link) is dimmed by the browser's own `:visited` styling, so you can see which videos you have opened. Nothing is stored: it lives in your browser history, per device, and survives a reload. |
 | `?view` / `?edit` page, video extension | Loads `movi.js` on demand and mounts `<movi-player src="<file-url>">`, replacing the iframe / "Cannot edit" placeholder. |
 | Directory page, text pages | **Zero** extra bytes: `movi.js` (4.8 MB) and `movi.wasm` (5.4 MB) are only fetched on a video view page. |

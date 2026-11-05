@@ -303,6 +303,37 @@ svg {
   margin-right: 2em;
 }
 
+/* Permanent entry point to assets/trust/index.html. The certificate hint on the player page only
+   appears when the certificate is untrusted, so this link is the always-available way to the
+   install instructions — visible on every page, trusted or not. */
+.trust-link {
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+  padding-left: 0.25em; /* same gutter as .toolbox .control */
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 0.9em;
+}
+
+.trust-link:hover {
+  color: var(--text-accent);
+  text-decoration: underline;
+}
+
+/* the global `svg { fill: var(--svg-primary) }` would otherwise pin the icon colour */
+.trust-link svg {
+  fill: currentColor;
+}
+
+/* On a phone the header is already tight; the lock icon alone carries the link (title tooltip
+   stays for pointer users, and the link itself has no text to lose). */
+@media (max-width: 600px) {
+  .trust-link-label {
+    display: none;
+  }
+}
+
 .login-btn {
   cursor: pointer;
 }
