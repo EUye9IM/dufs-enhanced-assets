@@ -121,3 +121,21 @@
   exact URLs.
 - Deploy script now runs `systemctl restart dufs` and prints the verification `curl` (with a
   browser UA, since dufs sniffs it).
+
+## 2026-11-06 — 11-06-trust-link-header
+
+- The trust page was reachable only from the certificate hint, which mounts on the player page and
+  only when the certificate is *untrusted*. Directory-page visitors and anyone who dismissed the
+  browser warning once had no route back. Now a static lock + "Trust" link sits in the header of
+  every page.
+- Placement mattered. `.toolbox-right` was the obvious slot and is wrong on a phone: measured at
+  390 px the link lands at x≈474, i.e. past the right edge, because dufs' header already overflows
+  horizontally there (246 px search field). In `.toolbox` it measures x≈44 (root) and x≈318 on a
+  three-level path at 390 px. Verified at 390/420/600/900/1440 with and without `-A`, since `-A`
+  adds five more header icons on the real deployment.
+- Bit me again, in a good way: my first measurements showed the *old* link position because the
+  local dufs had `index.html` cached from before the move. Restarting it (the rule we documented
+  one task earlier) fixed the numbers — the rule earned its keep immediately.
+- Also checked: the player layout contract still holds with the extra header child (head 49,
+  player bottom == innerHeight, overflow 0), and `trust/` still 500s while `trust/index.html`
+  returns 200.
